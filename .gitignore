@@ -13,6 +13,3 @@ dist/
 # os
 .DS_Store
 
-# reference material — kept local, not published
-Background Info/*.pdf
-Background Info/*.docx
