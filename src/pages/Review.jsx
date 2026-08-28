@@ -1,0 +1,188 @@
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
+} from "recharts";
+import { getSession, deleteSession } from "../lib/storage.js";
+import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
+import { C, lactColor } from "../theme.js";
+
+/* Review — one test, in detail. Reached by clicking a row in Analyze,
+   or straight after saving a capture. */
+export default function Review() {
+  const { id } = useParams();
+  const nav = useNavigate();
+  const [session, setSession] = useState(undefined); // undefined = loading
+  const [xMode, setXMode] = useState("hr");
+
+  useEffect(() => {
+    getSession(id).then(setSession);
+  }, [id]);
+
+  if (session === undefined) return <div className="lt-card lt-note">Loading…</div>;
+  if (session === null) {
+    return (
+      <div className="lt-card" style={{ textAlign: "center", padding: "40px 20px" }}>
+        <div className="lt-h1">Test not found</div>
+        <div className="lt-sub" style={{ margin: "8px 0 18px" }}>
+          It may have been deleted, or the link is wrong.
+        </div>
+        <Link className="lt-btn lt-btn-primary" to="/">Back to all tests</Link>
+      </div>
+    );
+  }
+
+  const rows = deriveRows(session.rows ?? [], session.dist);
+  const result = analyze(rows);
+  const chart = rows
+    .filter((r) => r.lactate != null && (xMode === "hr" ? r.hr != null : r.perMileSec != null))
+    .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, lactate: r.lactate }));
+
+  async function remove() {
+    if (!confirm(`Delete "${session.label || session.date}"? This cannot be undone.`)) return;
+    await deleteSession(session.id);
+    nav("/");
+  }
+
+  function csv() {
+    const head = "stage,target_hr,avg_hr,pct_hrmax,time,pace_mile,pace_km,mph,m_per_s,lactate_mmol";
+    const body = rows
+      .map((r) =>
+        [
+          r.n, r.target, r.hr ?? "",
+          r.hr && session.hrMax ? Math.round((r.hr / session.hrMax) * 100) : "",
+          r.sec ? `${Math.floor(r.sec / 60)}:${pad(r.sec % 60)}` : "",
+          r.pace ?? "", r.km ?? "", r.mph ?? "", r.ms ?? "", r.lactate ?? "",
+        ].join(",")
+      )
+      .join("\n");
+    const text = `# ${session.label || "Lactate step test"} ${session.date}  HRmax ${session.hrMax}  ${session.dist}m stages  ${session.temp ?? ""}\n${head}\n${body}`;
+    const b = new Blob([text], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = `lactate-${session.date}.csv`;
+    a.click();
+  }
+
+  return (
+    <>
+      <div className="lt-card" style={{ marginTop: 14 }}>
+        <div className="lt-eyebrow">{session.date}{session.athlete ? ` · ${session.athlete}` : ""}</div>
+        <div className="lt-h1">{session.label || `Test ${session.date}`}</div>
+        <div className="lt-sub">
+          {(session.rows ?? []).length} stages · {session.dist} m · HRmax {session.hrMax}
+          {session.temp ? ` · ${session.temp}` : ""}
+          {session.wind ? ` · ${session.wind}` : ""}
+        </div>
+        {session.notes && (
+          <div className="lt-note" style={{ marginTop: 10 }}>{session.notes}</div>
+        )}
+      </div>
+
+      {result ? (
+        <div className="lt-card">
+          <div className="lt-card-t">Thresholds</div>
+          <div className="lt-grid lt-g3">
+            <Stat label="LT1 (base +0.4)"
+                  value={result.lt1 ? `${result.lt1.to.hr} bpm` : "—"}
+                  sub={result.lt1 ? `stage ${result.lt1.to.n} · ${result.lt1.to.pace}/mi` : "not crossed"} />
+            <Stat label="HR at base +1.0"
+                  value={result.hrBase1 ? `${result.hrBase1} bpm` : "—"}
+                  sub={`baseline ${result.base.toFixed(1)} mmol`} />
+            <Stat label="OBLA 4.0 mmol"
+                  value={result.hr4 ? `${result.hr4} bpm` : "—"}
+                  sub={result.pace4 ? `${result.pace4}/mi` : "not reached"} />
+          </div>
+        </div>
+      ) : (
+        <div className="lt-card lt-note">
+          Not enough complete stages to analyse — needs at least three with
+          heart rate, time and lactate.
+        </div>
+      )}
+
+      <div className="lt-card">
+        <div className="lt-card-t" style={{ display: "flex", justifyContent: "space-between" }}>
+          <span>Lactate curve</span>
+          <div className="lt-seg sm">
+            <button className={`lt-seg-b ${xMode === "hr" ? "on" : ""}`} onClick={() => setXMode("hr")}>
+              vs HR
+            </button>
+            <button className={`lt-seg-b ${xMode === "pace" ? "on" : ""}`} onClick={() => setXMode("pace")}>
+              vs pace
+            </button>
+          </div>
+        </div>
+        <div style={{ height: 300 }}>
+          <ResponsiveContainer>
+            <LineChart data={chart} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
+              <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
+              <XAxis
+                type="number" dataKey="x" domain={["dataMin - 2", "dataMax + 2"]}
+                reversed={xMode === "pace"}
+                tick={{ fill: C.muted, fontSize: 11 }}
+                tickFormatter={(v) => (xMode === "hr" ? Math.round(v) : minToPace(v))}
+                label={{ value: xMode === "hr" ? "heart rate (bpm)" : "pace (min/mi)",
+                         position: "insideBottom", offset: -14, fill: C.dim, fontSize: 11 }}
+              />
+              <YAxis tick={{ fill: C.muted, fontSize: 11 }}
+                     label={{ value: "mmol/L", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
+                labelFormatter={(v) => (xMode === "hr" ? `${Math.round(v)} bpm` : `${minToPace(v)}/mi`)}
+                formatter={(v) => [`${v} mmol/L`, "lactate"]}
+              />
+              <ReferenceLine y={4} stroke={C.warm} strokeDasharray="4 4"
+                             label={{ value: "4.0", fill: C.warm, fontSize: 10, position: "right" }} />
+              <Line dataKey="lactate" stroke={C.signal} strokeWidth={2}
+                    dot={{ r: 3 }} type="monotone" isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="lt-card">
+        <div className="lt-card-t">Stages</div>
+        <table className="lt-table">
+          <thead>
+            <tr>
+              <th>#</th><th>time</th><th>pace/mi</th><th>HR</th>
+              <th>%max</th><th>lactate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.n}>
+                <td className="lt-mono">{r.n}</td>
+                <td className="lt-mono">{r.sec ? `${Math.floor(r.sec / 60)}:${pad(r.sec % 60)}` : "—"}</td>
+                <td className="lt-mono">{r.pace ?? "—"}</td>
+                <td className="lt-mono">{r.hr ?? "—"}</td>
+                <td className="lt-mono">
+                  {r.hr && session.hrMax ? `${Math.round((r.hr / session.hrMax) * 100)}%` : "—"}
+                </td>
+                <td className="lt-mono" style={{ color: lactColor(r.lactate), fontWeight: 700 }}>
+                  {r.lactate ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="lt-foot" style={{ marginTop: 14 }}>
+          <button className="lt-btn lt-btn-ghost" onClick={() => nav("/")}>Back</button>
+          <button className="lt-btn lt-btn-ghost" onClick={csv}>CSV</button>
+          <button className="lt-btn lt-btn-ghost" onClick={remove}>Delete</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Stat({ label, value, sub }) {
+  return (
+    <div className="lt-stat">
+      <div className="lt-stat-l">{label}</div>
+      <div className="lt-stat-v lt-mono">{value}</div>
+      <div className="lt-stat-s">{sub}</div>
+    </div>
+  );
+}
