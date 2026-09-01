@@ -132,7 +132,7 @@ export default function Review() {
                     value={result.logLog ? `${result.logLog.hr} bpm` : "—"}
                     sub={result.logLog
                       ? `${result.logLog.pace}/mi · ${result.logLog.lactate} mmol`
-                      : "no breakpoint found"} />
+                      : result.logLogNote ? "rejected — see below" : "no breakpoint found"} />
               <Stat label="Dmax"
                     value={result.dmax ? `${result.dmax.hr} bpm` : "—"}
                     sub={result.dmax
@@ -144,6 +144,11 @@ export default function Review() {
                       ? `${result.modDmax.pace}/mi · ${result.modDmax.lactate} mmol`
                       : "needs 5+ stages with a clear rise"} />
             </div>
+            {result.logLogNote && (
+              <div className="lt-note" style={{ marginTop: 10, color: C.warm }}>
+                {result.logLogNote}
+              </div>
+            )}
             {result.logLog?.weak && (
               <div className="lt-note" style={{ marginTop: 10, color: C.warm }}>
                 The log-log breakpoint is shallow — the curve barely changes

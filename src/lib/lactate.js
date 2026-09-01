@@ -98,7 +98,7 @@ export function analyze(rows) {
     max: done[done.length - 1],
     dmax: dmax(rows),
     modDmax: modifiedDmax(rows),
-    logLog: logLog(rows),
+    ...lt1LogLog(rows, hr4 ? Math.round(hr4) : null),
   };
 }
 
@@ -353,4 +353,29 @@ export function logLog(rows) {
        worth reporting but not worth trusting on its own. */
     weak: ratio < 1.5,
   };
+}
+
+/* LT1 sits below LT2. Always. If the log-log fit lands at or above the
+   4 mmol point it has not found the aerobic threshold, and reporting it
+   anyway would be worse than reporting nothing.
+
+   In practice this happens when a test opens too hard: with only one
+   stage below the real LT1 there is no aerobic segment for the lower
+   line to fit, so the search settles on the terminal steepening
+   instead. That is a protocol problem, not a fitting problem, and the
+   message says so. */
+function lt1LogLog(rows, hr4) {
+  const ll = logLog(rows);
+  if (!ll) return { logLog: null, logLogNote: null };
+  if (hr4 != null && ll.hr != null && ll.hr >= hr4) {
+    return {
+      logLog: null,
+      logLogNote:
+        `The log-log breakpoint came out at ${ll.hr} bpm, at or above the ` +
+        `4 mmol point (${hr4} bpm), so it cannot be LT1. This usually means ` +
+        `the test opened too hard — the method needs two or three stages ` +
+        `below the aerobic threshold and there were not enough here.`,
+    };
+  }
+  return { logLog: ll, logLogNote: null };
 }
