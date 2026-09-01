@@ -184,8 +184,18 @@ export async function importAll(payload) {
   return write(KEY, [...byId.values()]);
 }
 
+/* Read this browser's local sessions regardless of which backend is
+   active. Used to spot tests recorded before the backend existed, which
+   would otherwise just seem to vanish when Supabase is switched on. */
+export function getLocalSessions() {
+  const all = read(KEY, []);
+  return Array.isArray(all) ? all : [];
+}
+
 /* Push whatever is in this browser's localStorage up to Supabase. The
-   one-time migration for data recorded before the backend existed. */
+   one-time migration for data recorded before the backend existed.
+   ON CONFLICT DO NOTHING, so re-running it is harmless and it can never
+   overwrite something already in the shared database. */
 export async function migrateLocalToRemote() {
   if (!isConfigured) throw new Error("Supabase is not configured");
   const local = read(KEY, []);

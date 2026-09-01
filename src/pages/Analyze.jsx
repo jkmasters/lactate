@@ -3,7 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { getSessions, deleteSession, deleteNeedsPassword, exportAll, backend } from "../lib/storage.js";
+import {
+  getSessions, deleteSession, deleteNeedsPassword, exportAll, backend,
+  getLocalSessions, migrateLocalToRemote,
+} from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
 import { C } from "../theme.js";
 
@@ -16,6 +19,8 @@ export default function Analyze() {
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const [strays, setStrays] = useState([]);   // local tests not in the DB
+  const [importing, setImporting] = useState(false);
   const [picked, setPicked] = useState(() => new Set());
   const [athlete, setAthlete] = useState("all");
   const [lens, setLens] = useState("overlay"); // overlay | trend
@@ -29,6 +34,13 @@ export default function Analyze() {
         setSessions(sorted);
         // preselect the two most recent so the page is useful on arrival
         setPicked(new Set(sorted.slice(0, 2).map((x) => String(x.id))));
+        /* Tests recorded on this device before the shared database
+           existed. Without this they simply disappear from view, which
+           looks exactly like data loss. */
+        if (backend() === "supabase") {
+          const have = new Set(sorted.map((x) => String(x.id)));
+          setStrays(getLocalSessions().filter((x) => !have.has(String(x.id))));
+        }
         setLoaded(true);
       })
       .catch((e) => {
@@ -130,8 +142,44 @@ export default function Analyze() {
     );
   }
 
+  async function importStrays() {
+    setImporting(true);
+    try {
+      await migrateLocalToRemote();
+      setStrays([]);
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <>
+      {strays.length > 0 && (
+        <div className="lt-resume" style={{ marginTop: 14 }}>
+          <div>
+            <div className="lt-resume-t">
+              {strays.length} test{strays.length === 1 ? "" : "s"} on this device only
+            </div>
+            <div className="lt-resume-s lt-mono">
+              {strays
+                .slice(0, 3)
+                .map((s) => `${s.date}${s.athlete ? ` · ${s.athlete}` : ""}`)
+                .join("  ·  ")}
+              {strays.length > 3 ? `  · +${strays.length - 3} more` : ""}
+            </div>
+            <div className="lt-resume-s">
+              Recorded before the shared database existed. They are safe, just
+              not uploaded yet.
+            </div>
+          </div>
+          <button className="lt-btn lt-btn-primary" onClick={importStrays} disabled={importing}>
+            {importing ? "Uploading…" : "Upload to shared database"}
+          </button>
+        </div>
+      )}
       <div className="lt-analyze">
         {/* ---- left: the list you tick ---- */}
         <div className="lt-card" style={{ marginTop: 14 }}>
