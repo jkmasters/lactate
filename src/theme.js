@@ -132,6 +132,9 @@ const baseCss = `
 .lt-field > span,.lt-field label{display:block;font-size:9px;letter-spacing:.22em;
   text-transform:uppercase;color:var(--dim);margin-bottom:6px;}
 .lt-field + .lt-field{margin-top:var(--s3);}
+/* inside a grid the gap already spaces fields; the sibling margin
+   would otherwise drop every field but the first, misaligning row 1 */
+.lt-grid > .lt-field + .lt-field{margin-top:0;}
 .lt-input{width:100%;background:var(--panel2);border:1px solid var(--rule);color:var(--ink);
   padding:11px 12px;font-size:15px;font-family:var(--mono);font-variant-numeric:tabular-nums;
   outline:none;transition:border-color .1s,box-shadow .1s;}
