@@ -109,20 +109,51 @@ export default function Review() {
       </div>
 
       {result ? (
-        <div className="lt-card">
-          <div className="lt-card-t">Thresholds</div>
-          <div className="lt-grid lt-g3">
-            <Stat label="LT1 (base +0.4)"
-                  value={result.lt1 ? `${result.lt1.to.hr} bpm` : "—"}
-                  sub={result.lt1 ? `stage ${result.lt1.to.n} · ${result.lt1.to.pace}/mi` : "not crossed"} />
-            <Stat label="HR at base +1.0"
-                  value={result.hrBase1 ? `${result.hrBase1} bpm` : "—"}
-                  sub={`baseline ${result.base.toFixed(1)} mmol`} />
-            <Stat label="OBLA 4.0 mmol"
-                  value={result.hr4 ? `${result.hr4} bpm` : "—"}
-                  sub={result.pace4 ? `${result.pace4}/mi` : "not reached"} />
+        <>
+          <div className="lt-card">
+            <div className="lt-card-t">Fixed thresholds</div>
+            <div className="lt-grid lt-g3">
+              <Stat label="LT1 (base +0.4)"
+                    value={result.lt1 ? `${result.lt1.to.hr} bpm` : "—"}
+                    sub={result.lt1 ? `stage ${result.lt1.to.n} · ${result.lt1.to.pace}/mi` : "not crossed"} />
+              <Stat label="HR at base +1.0"
+                    value={result.hrBase1 ? `${result.hrBase1} bpm` : "—"}
+                    sub={`baseline ${result.base.toFixed(1)} mmol`} />
+              <Stat label="OBLA 4.0 mmol"
+                    value={result.hr4 ? `${result.hr4} bpm` : "—"}
+                    sub={result.pace4 ? `${result.pace4}/mi` : "not reached"} />
+            </div>
           </div>
-        </div>
+
+          <div className="lt-card">
+            <div className="lt-card-t">Curve-shape thresholds</div>
+            <div className="lt-grid lt-g2">
+              <Stat label="Dmax"
+                    value={result.dmax ? `${result.dmax.hr} bpm` : "—"}
+                    sub={result.dmax
+                      ? `${result.dmax.pace}/mi · ${result.dmax.lactate} mmol`
+                      : "needs 5+ stages with a clear rise"} />
+              <Stat label="Modified Dmax"
+                    value={result.modDmax ? `${result.modDmax.hr} bpm` : "—"}
+                    sub={result.modDmax
+                      ? `${result.modDmax.pace}/mi · ${result.modDmax.lactate} mmol`
+                      : "needs 5+ stages with a clear rise"} />
+            </div>
+            {result.dmax?.submaximal && (
+              <div className="lt-note" style={{ marginTop: 10, color: C.warm }}>
+                The last stage finished below 4 mmol, so this test may not have
+                reached a genuine maximal effort. Both figures above are anchored
+                on that final point and will read low if it was submaximal —
+                Dmax more so than Modified Dmax.
+              </div>
+            )}
+            <div className="lt-note" style={{ marginTop: 8, fontSize: 11 }}>
+              Furthest point on the fitted curve from a chord. Dmax spans the
+              first stage to the last; Modified Dmax starts at LT1 instead, so
+              an easy opening stage cannot drag the answer around.
+            </div>
+          </div>
+        </>
       ) : (
         <div className="lt-card lt-note">
           Not enough complete stages to analyse — needs at least three with

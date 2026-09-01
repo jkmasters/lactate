@@ -96,6 +96,8 @@ export function analyze(rows) {
     pace4: pace4 ? `${Math.floor(pace4 / 60)}:${pad(Math.round(pace4 % 60))}` : null,
     hrBase1: hrBase1 ? Math.round(hrBase1) : null,
     max: done[done.length - 1],
+    dmax: dmax(rows),
+    modDmax: modifiedDmax(rows),
   };
 }
 
@@ -122,4 +124,154 @@ export function deriveRows(stages, dist) {
       perMileSec: p?.perMileSec ?? null,
     };
   });
+}
+
+/* ------------------------------------------------------------------ *
+ *  Dmax and Modified Dmax
+ *
+ *  Both find the point on the fitted lactate curve lying furthest from
+ *  a chord. Rather than measuring perpendicular distances, they solve
+ *  where the tangent matches the chord's slope — the same point, one
+ *  quadratic instead of a search.
+ *
+ *    Dmax          chord spans the first to the last stage
+ *    Modified Dmax chord starts at LT1 instead, so an easy opening
+ *                  stage cannot drag the answer around
+ *
+ *  x is velocity in m/s, the usual axis for a running curve. Heart rate
+ *  is read back by interpolating the raw stages at the answer.
+ * ------------------------------------------------------------------ */
+
+/* Least-squares polynomial fit, normal equations + Gaussian elimination
+   with partial pivoting. x is centred on its mean first: velocities
+   cubed span two orders of magnitude and the uncentred matrix is badly
+   conditioned. Returns coefficients in the centred variable. */
+function polyfit(xs, ys, deg = 3) {
+  const n = xs.length;
+  const xbar = xs.reduce((a, b) => a + b, 0) / n;
+  const u = xs.map((x) => x - xbar);
+  const m = deg + 1;
+
+  // normal equations: (VtV) c = Vty
+  const A = Array.from({ length: m }, () => new Array(m + 1).fill(0));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < m; j++) {
+      let s = 0;
+      for (let k = 0; k < n; k++) s += u[k] ** (i + j);
+      A[i][j] = s;
+    }
+    let t = 0;
+    for (let k = 0; k < n; k++) t += ys[k] * u[k] ** i;
+    A[i][m] = t;
+  }
+
+  for (let col = 0; col < m; col++) {
+    let piv = col;
+    for (let r = col + 1; r < m; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (Math.abs(A[piv][col]) < 1e-12) return null; // singular
+    [A[col], A[piv]] = [A[piv], A[col]];
+    for (let r = 0; r < m; r++) {
+      if (r === col) continue;
+      const f = A[r][col] / A[col][col];
+      for (let c = col; c <= m; c++) A[r][c] -= f * A[col][c];
+    }
+  }
+
+  const c = A.map((row, i) => row[m] / A[i][i]);
+  return { c, xbar };
+}
+
+const polyval = ({ c, xbar }, x) => {
+  const u = x - xbar;
+  return c.reduce((sum, ci, i) => sum + ci * u ** i, 0);
+};
+
+/* Solve f'(u) = slope for a cubic, returning candidate x values inside
+   [lo, hi]. Falls back to the linear case when the cubic term vanishes. */
+function tangentAt(fit, slope, lo, hi) {
+  const [, c1, c2, c3] = fit.c;
+  const out = [];
+  if (Math.abs(c3) < 1e-12) {
+    if (Math.abs(c2) > 1e-12) out.push((slope - c1) / (2 * c2) + fit.xbar);
+  } else {
+    const disc = 4 * c2 * c2 - 12 * c3 * (c1 - slope);
+    if (disc < 0) return [];
+    const r = Math.sqrt(disc);
+    out.push((-2 * c2 + r) / (6 * c3) + fit.xbar, (-2 * c2 - r) / (6 * c3) + fit.xbar);
+  }
+  return out.filter((x) => Number.isFinite(x) && x >= lo && x <= hi);
+}
+
+/* Linear interpolation of a stage field at a given velocity. */
+function atVelocity(pts, key, v) {
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if (v >= a.v && v <= b.v) {
+      const f = b.v === a.v ? 0 : (v - a.v) / (b.v - a.v);
+      return a[key] + f * (b[key] - a[key]);
+    }
+  }
+  return null;
+}
+
+/* startIdx = 0 gives Dmax; the LT1 stage gives Modified Dmax. */
+function dmaxFrom(rows, startIdx) {
+  const pts = rows
+    .filter((r) => r.lactate != null && r.perMileSec && r.hr != null)
+    .map((r) => ({ v: MILE_M / r.perMileSec, y: r.lactate, hr: r.hr, perMileSec: r.perMileSec }))
+    .sort((a, b) => a.v - b.v);
+
+  // a cubic through four points is an exact fit with no residual, so the
+  // curve is only meaningful from five stages up
+  if (pts.length < 5 || startIdx > pts.length - 2) return null;
+
+  const fit = polyfit(pts.map((p) => p.v), pts.map((p) => p.y), 3);
+  if (!fit) return null;
+
+  const a = pts[startIdx], b = pts[pts.length - 1];
+  if (b.v <= a.v) return null;
+  const slope = (b.y - a.y) / (b.v - a.v);
+
+  const cands = tangentAt(fit, slope, a.v, b.v);
+  if (!cands.length) return null;
+
+  // furthest from the chord, when the quadratic gives two candidates
+  const dist = (x) => Math.abs(slope * (x - a.v) + a.y - polyval(fit, x));
+  const v = cands.reduce((best, x) => (dist(x) > dist(best) ? x : best), cands[0]);
+
+  const perMileSec = MILE_M / v;
+  return {
+    v,
+    lactate: +polyval(fit, v).toFixed(2),
+    hr: Math.round(atVelocity(pts, "hr", v) ?? NaN) || null,
+    pace: `${Math.floor(perMileSec / 60)}:${pad(Math.round(perMileSec % 60))}`,
+    perMileSec,
+    /* The last stage anchors the chord, so a test that stopped short of
+       a genuine maximal effort pulls the answer down — and it does so
+       quietly, producing a number that looks perfectly reasonable. Flag
+       it rather than hide it. */
+    submaximal: b.y < 4.0,
+    stages: pts.length,
+  };
+}
+
+export function dmax(rows) {
+  return dmaxFrom(rows, 0);
+}
+
+/* The chord starts at the first stage rising >= 0.4 mmol over baseline —
+   the same LT1 the fixed-threshold analysis already reports. */
+export function modifiedDmax(rows) {
+  const pts = rows
+    .filter((r) => r.lactate != null && r.perMileSec && r.hr != null)
+    .sort((a, b) => MILE_M / a.perMileSec - MILE_M / b.perMileSec);
+  if (pts.length < 5) return null;
+
+  const base = Math.min(...pts.slice(0, 3).map((r) => r.lactate));
+  let start = -1;
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].lactate - base >= 0.4) { start = i; break; }
+  }
+  if (start < 0 || start > pts.length - 2) return null;
+  return dmaxFrom(rows, start);
 }

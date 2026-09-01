@@ -24,6 +24,7 @@ export default function Analyze() {
   const [picked, setPicked] = useState(() => new Set());
   const [athlete, setAthlete] = useState("all");
   const [lens, setLens] = useState("overlay"); // overlay | trend
+  const [method, setMethod] = useState("obla");  // obla | dmax | moddmax
   const [xMode, setXMode] = useState("hr");    // hr | pace
 
   function load() {
@@ -280,7 +281,7 @@ export default function Analyze() {
           ) : lens === "overlay" ? (
             <Overlay sessions={chosen} xMode={xMode} setXMode={setXMode} />
           ) : (
-            <Trend sessions={chosen} />
+            <Trend sessions={chosen} method={method} setMethod={setMethod} />
           )}
         </div>
       </div>
@@ -357,17 +358,29 @@ function Overlay({ sessions, xMode, setXMode }) {
 
 /* Thresholds over time — the view that needed a backend, and the
    reason any of this is worth keeping. */
-function Trend({ sessions }) {
+const METHODS = {
+  obla:    { label: "OBLA 4.0",      name: "4 mmol" },
+  dmax:    { label: "Dmax",          name: "Dmax" },
+  moddmax: { label: "Modified Dmax", name: "Mod Dmax" },
+};
+
+function Trend({ sessions, method, setMethod }) {
   const data = [...sessions]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((s) => {
       const r = analyze(deriveRows(s.rows ?? [], s.dist));
+      /* Every method reads off the same raw stages, so switching here
+         re-derives the whole history rather than looking anything up. */
+      const th =
+        method === "dmax" ? r?.dmax
+        : method === "moddmax" ? r?.modDmax
+        : r ? { hr: r.hr4, pace: r.pace4 } : null;
       return {
         date: s.date,
         label: s.label || s.date,
-        hr4: r?.hr4 ?? null,
+        hr4: th?.hr ?? null,
         hrLt1: r?.hrBase1 ?? null,
-        pace4: r?.pace4 ? paceToMin(r.pace4) : null,
+        pace4: th?.pace ? paceToMin(th.pace) : null,
       };
     });
 
@@ -375,14 +388,24 @@ function Trend({ sessions }) {
   if (!any) {
     return (
       <div className="lt-note" style={{ padding: "60px 0", textAlign: "center" }}>
-        No thresholds to trend yet — a test needs at least three stages
-        with heart rate, time and lactate, and must reach 4 mmol/L.
+        Nothing to trend for this method yet. Fixed thresholds need three
+        stages reaching 4 mmol/L; the Dmax methods need five or more with a
+        clear rise.
       </div>
     );
   }
 
   return (
-    <div style={{ height: 340 }}>
+    <>
+      <div className="lt-seg sm" style={{ marginBottom: 10 }}>
+        {Object.entries(METHODS).map(([k, m]) => (
+          <button key={k} className={`lt-seg-b ${method === k ? "on" : ""}`}
+                  onClick={() => setMethod(k)}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ height: 306 }}>
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
           <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
@@ -410,13 +433,14 @@ function Trend({ sessions }) {
           <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
           <Line yAxisId="hr" dataKey="hrLt1" name="HR at LT1 (bpm)" stroke={C.cool}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
-          <Line yAxisId="hr" dataKey="hr4" name="HR at 4 mmol (bpm)" stroke={C.hot}
+          <Line yAxisId="hr" dataKey="hr4" name={`HR at ${METHODS[method].name} (bpm)`} stroke={C.hot}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
-          <Line yAxisId="pace" dataKey="pace4" name="Pace at 4 mmol (min/mi)" stroke={C.signal}
+          <Line yAxisId="pace" dataKey="pace4" name={`Pace at ${METHODS[method].name} (min/mi)`} stroke={C.signal}
                 strokeWidth={3} dot={{ r: 4 }} connectNulls isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+      </div>
+    </>
   );
 }
 
