@@ -16,18 +16,36 @@ Three screens:
 Computed from raw stage data, never stored as the source of truth, so
 that adding a method later can be re-run against every historical test.
 
+Fixed concentration:
+
 | method | definition |
 | --- | --- |
 | LT1 | first stage rising ≥ 0.4 mmol above baseline |
 | base +1.0 | baseline + 1.0 mmol, interpolated to HR |
 | OBLA 4.0 | fixed 4 mmol, interpolated to HR and pace |
 
+Curve shape — the point on a fitted cubic furthest from a chord, found
+by solving where the tangent matches the chord's slope rather than
+searching perpendicular distances:
+
+| method | chord runs from |
+| --- | --- |
+| Dmax | first stage to last |
+| Modified Dmax | LT1 to last |
+
+Both need five or more stages (a cubic through four points is an exact
+fit and says nothing) and a genuinely maximal final stage, since the last
+point anchors the chord. A test finishing below 4 mmol still reports but
+is flagged in Review: it will read low, Dmax more so than Modified Dmax.
+
 Baseline is the lowest of the first three stages — lactate often dips at
 stage 2 or 3 as clearance catches up, and a three-stage window catches
 that. The pre-test rest and baseline readings are recorded for reference
 but do not feed the threshold math.
 
-Dmax and log-log are not implemented.
+Log-log and the Stegmann IAT are not implemented — log-log gives LT1
+rather than LT2, and IAT needs lactate sampled during recovery, which
+this protocol does not collect.
 
 ## Running it
 
