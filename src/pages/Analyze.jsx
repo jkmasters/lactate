@@ -12,9 +12,7 @@ import {
   analyze, deriveRows, minToPace, pad,
   convertPace, formatPaceValue, unitLabel,
 } from "../lib/lactate.js";
-import { C, chart } from "../theme.js";
-
-const SERIES = [C.signal, C.cool, C.warm, C.hot, "#8E7CC3", "#6FBF73"];
+import { C, chart, SERIES } from "../theme.js";
 
 const METHODS = {
   obla:    { label: "OBLA 4.0",      name: "4 mmol" },
@@ -435,12 +433,12 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
                 (max) => max + pad_,
               ]}
               reversed={reversed}
-              tick={{ fill: C.muted, fontSize: 11 }}
+              tick={chart.tick}
               tickFormatter={fmtX}
             />
             <YAxis
-              tick={{ fill: C.muted, fontSize: 11 }}
-              label={{ value: "mmol/L", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }}
+              tick={chart.tick}
+              label={{ value: "mmol/L", angle: -90, position: "insideLeft", ...chart.axisLabel }}
             />
             <Tooltip
               contentStyle={chart.tooltip}
@@ -448,8 +446,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
                 xMode === "hr" ? `${Math.round(v)} bpm` : `${fmtX(v)} ${unitLabel(unit, rate)}`}
               formatter={(val, name) => [`${val} mmol/L`, name]}
             />
-            <Legend wrapperStyle={{ fontSize: 11, color: C.muted, paddingTop: 6 }}
-                    verticalAlign="bottom" />
+            <Legend wrapperStyle={{ ...chart.legend, paddingTop: 6 }} verticalAlign="bottom" />
             {series.flatMap((s, i) => {
               const colour = SERIES[i % SERIES.length];
               const out = [];
@@ -457,12 +454,12 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
               if (s.marks.lt1 != null)
                 out.push(
                   <ReferenceLine key={`${s.id}-lt1`} x={s.marks.lt1} stroke={colour}
-                                 strokeWidth={1} strokeDasharray="1 4" strokeOpacity={0.9} />
+                                 strokeWidth={1} strokeDasharray={chart.lt1Dash} strokeOpacity={0.9} />
                 );
               if (s.marks.lt2 != null)
                 out.push(
                   <ReferenceLine key={`${s.id}-lt2`} x={s.marks.lt2} stroke={colour}
-                                 strokeWidth={1} strokeDasharray="7 4" strokeOpacity={0.9} />
+                                 strokeWidth={1} strokeDasharray={chart.lt2Dash} strokeOpacity={0.9} />
                 );
               return out;
             })}
@@ -473,8 +470,8 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
                 dataKey="y"
                 name={s.name}
                 stroke={SERIES[i % SERIES.length]}
-                strokeWidth={2}
-                dot={{ r: 3 }}
+                strokeWidth={2.5}
+                dot={{ r: 3, strokeWidth: 0 }}
                 type="monotone"
                 isAnimationActive={false}
               />
@@ -529,13 +526,13 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
           <CartesianGrid stroke={chart.grid} />
-          <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
+          <XAxis dataKey="date" tick={chart.tick} />
           <YAxis
             yAxisId="hr"
             domain={[(min) => Math.floor(min - 4), (max) => Math.ceil(max + 4)]}
             allowDecimals={false}
-            tick={{ fill: C.muted, fontSize: 11 }}
-            label={{ value: "bpm", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }}
+            tick={chart.tick}
+            label={{ value: "bpm", angle: -90, position: "insideLeft", ...chart.axisLabel }}
           />
           <YAxis
             yAxisId="pace"
@@ -543,10 +540,10 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
             reversed={rate === "pace"}
             domain={[(min) => min - (rate === "speed" ? 0.4 : 0.25),
                      (max) => max + (rate === "speed" ? 0.4 : 0.25)]}
-            tick={{ fill: C.muted, fontSize: 11 }}
+            tick={chart.tick}
             tickFormatter={(v) => formatPaceValue(v, rate)}
             label={{ value: unitLabel(unit, rate), angle: 90, position: "insideRight",
-                     fill: C.dim, fontSize: 11 }}
+                     ...chart.axisLabel }}
           />
           <Tooltip
             contentStyle={chart.tooltip}
@@ -555,13 +552,13 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
                 ? [`${formatPaceValue(v, rate)} ${unitLabel(unit, rate)}`, n]
                 : [`${v} bpm`, n]}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
+          <Legend wrapperStyle={chart.legend} />
           <Line yAxisId="hr" dataKey="hrLt1" name={`HR at LT1 ${LT1_METHODS[lt1Method].name} (bpm)`} stroke={C.cool}
-                strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+                strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0 }} connectNulls isAnimationActive={false} />
           <Line yAxisId="hr" dataKey="hr4" name={`HR at ${METHODS[method].name} (bpm)`} stroke={C.hot}
-                strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+                strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0 }} connectNulls isAnimationActive={false} />
           <Line yAxisId="pace" dataKey="pace4" name={`${rate === "speed" ? "Speed" : "Pace"} at ${METHODS[method].name} (${unitLabel(unit, rate)})`} stroke={C.signal}
-                strokeWidth={3} dot={{ r: 4 }} connectNulls isAnimationActive={false} />
+                strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0 }} connectNulls isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
       </div>

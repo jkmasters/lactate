@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { saveSession, saveDraft, getDraft, clearDraft } from "../lib/storage.js";
 import { analyze, deriveRows, pad } from "../lib/lactate.js";
-import { C, chart, lactColor } from "../theme.js";
+import { C, chart, lactColor, SERIES } from "../theme.js";
 
 const OFFSETS = [48, 40, 32, 24, 16, 8]; // target HR = hrMax - offset
 
@@ -549,18 +549,18 @@ export default function Capture() {
                          margin={{ top: 8, right: 12, bottom: 20, left: 4 }}>
                 <CartesianGrid stroke={chart.grid} />
                 <XAxis type="number" dataKey="x" domain={["dataMin - 4", "dataMax + 4"]}
-                       tick={{ fill: C.muted, fontSize: 11 }}
+                       tick={chart.tick}
                        label={{ value: "heart rate (bpm)", position: "insideBottom",
-                                offset: -12, fill: C.dim, fontSize: 11 }} />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} domain={[0, "dataMax + 1"]} />
+                                offset: -12, ...chart.axisLabel }} />
+                <YAxis tick={chart.tick} domain={[0, "dataMax + 1"]} />
                 <Tooltip
                   contentStyle={chart.tooltip}
                   labelFormatter={(v) => `${Math.round(v)} bpm`}
                   formatter={(v) => [`${v} mmol/L`, "lactate"]} />
-                <ReferenceLine y={4} stroke={C.warm} strokeDasharray="4 4"
-                               label={{ value: "4.0", fill: C.warm, fontSize: 10, position: "right" }} />
-                <Line dataKey="lactate" stroke={C.signal} strokeWidth={2}
-                      dot={{ r: 4 }} type="monotone" isAnimationActive={false} />
+                <ReferenceLine y={4} stroke={C.warm} strokeDasharray={chart.obla}
+                               label={{ value: "4.0", ...chart.axisLabel, fill: C.warm, position: "right" }} />
+                <Line dataKey="lactate" stroke={SERIES[0]} strokeWidth={2.5}
+                      dot={{ r: 3, strokeWidth: 0 }} type="monotone" isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

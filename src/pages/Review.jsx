@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { getSession, deleteSession, deleteNeedsPassword } from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
-import { C, chart, lactColor } from "../theme.js";
+import { C, chart, lactColor, SERIES } from "../theme.js";
 
 /* Review — one test, in detail. Reached by clicking a row in Analyze,
    or straight after saving a capture. */
@@ -199,22 +199,22 @@ export default function Review() {
               <XAxis
                 type="number" dataKey="x" domain={["dataMin - 2", "dataMax + 2"]}
                 reversed={xMode === "pace"}
-                tick={{ fill: C.muted, fontSize: 11 }}
+                tick={chart.tick}
                 tickFormatter={(v) => (xMode === "hr" ? Math.round(v) : minToPace(v))}
                 label={{ value: xMode === "hr" ? "heart rate (bpm)" : "pace (min/mi)",
-                         position: "insideBottom", offset: -14, fill: C.dim, fontSize: 11 }}
+                         position: "insideBottom", offset: -14, ...chart.axisLabel }}
               />
-              <YAxis tick={{ fill: C.muted, fontSize: 11 }}
-                     label={{ value: "mmol/L", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }} />
+              <YAxis tick={chart.tick}
+                     label={{ value: "mmol/L", angle: -90, position: "insideLeft", ...chart.axisLabel }} />
               <Tooltip
                 contentStyle={chart.tooltip}
                 labelFormatter={(v) => (xMode === "hr" ? `${Math.round(v)} bpm` : `${minToPace(v)}/mi`)}
                 formatter={(v) => [`${v} mmol/L`, "lactate"]}
               />
-              <ReferenceLine y={4} stroke={C.warm} strokeDasharray="4 4"
-                             label={{ value: "4.0", fill: C.warm, fontSize: 10, position: "right" }} />
-              <Line dataKey="lactate" stroke={C.signal} strokeWidth={2}
-                    dot={{ r: 3 }} type="monotone" isAnimationActive={false} />
+              <ReferenceLine y={4} stroke={C.warm} strokeDasharray={chart.obla}
+                             label={{ value: "4.0", ...chart.axisLabel, fill: C.warm, position: "right" }} />
+              <Line dataKey="lactate" stroke={SERIES[0]} strokeWidth={2.5}
+                    dot={{ r: 3, strokeWidth: 0 }} type="monotone" isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
