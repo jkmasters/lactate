@@ -25,8 +25,10 @@ export default function App() {
   return (
     <div className="lt-root">
       <style>{css}</style>
+      {/* outside the wrap: the bar and its grid horizon are full-bleed,
+          and .lt-nav-inner centres the content within them */}
+      <Nav />
       <div className={wide ? "lt-wrap-wide" : "lt-wrap"}>
-        <Nav />
         <Routes>
           <Route path="/" element={<Analyze />} />
           <Route path="/analyze" element={<Navigate to="/" replace />} />
