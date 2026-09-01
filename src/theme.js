@@ -73,6 +73,16 @@ export const chart = {
 const baseCss = `
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
+/* The page itself, not just the app root. body carries an 8px UA margin
+   and neither html nor body has a background of its own, so the browser
+   canvas showed as a pale frame around everything. Tokens live on
+   .lt-root and are not visible to its ancestors, hence the literal from
+   the same C object the tokens are built from.
+
+   color-scheme keeps scrollbars and form controls dark to match. */
+html { background:${C.ground}; color-scheme:dark; }
+body { margin:0; padding:0; background:${C.ground}; }
+
 .lt-root {
   --ground:${C.ground}; --panel:${C.panel}; --panel2:${C.panel2};
   --rule:${C.rule}; --rule2:${C.rule2};
