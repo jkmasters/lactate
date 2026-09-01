@@ -28,7 +28,21 @@ create table if not exists admin_secret (
 -- Only delete_test() reaches it, and only because that runs as definer.
 alter table admin_secret enable row level security;
 
--- >>> CHANGE THIS PASSWORD <<<
+-- ===========================================================================
+--  >>> PUT THE DELETE PASSWORD BETWEEN THE QUOTES ON THE NEXT LINE <<<
+--
+--  Only the quoted string changes. Nothing is stored in plain text — it
+--  is hashed on the way in, which is why the password cannot be read
+--  back out later. Write it down somewhere.
+--
+--  Safe to re-run with a different password: the hash is replaced.
+--
+--  DO NOT commit the real password into this file. Paste this script into
+--  the Supabase SQL editor and change the line there. What is stored in
+--  the database is a hash; what would be stored in git history is the
+--  password itself, and git history is forever.
+-- ===========================================================================
+
 insert into admin_secret (id, pass_hash)
 values (1, extensions.crypt('change-me', extensions.gen_salt('bf')))
 on conflict (id) do update set pass_hash = excluded.pass_hash;
