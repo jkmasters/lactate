@@ -56,7 +56,11 @@ export default function Review() {
         ].join(",")
       )
       .join("\n");
-    const text = `# ${session.label || "Lactate step test"} ${session.date}  HRmax ${session.hrMax}  ${session.dist}m stages  ${session.temp ?? ""}\n${head}\n${body}`;
+    const pre = [
+      session.rest ? `rest,,${session.rest.hr ?? ""},,,,,,,${session.rest.lact}` : null,
+      session.baseline ? `baseline,,${session.baseline.hr ?? ""},,,,,,,${session.baseline.lact}` : null,
+    ].filter(Boolean).join("\n");
+    const text = `# ${session.label || "Lactate step test"} ${session.date}  HRmax ${session.hrMax}  ${session.dist}m stages  ${session.temp ?? ""}\n${head}\n${pre}${pre ? "\n" : ""}${body}`;
     const b = new Blob([text], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(b);
@@ -73,6 +77,8 @@ export default function Review() {
           {(session.rows ?? []).length} stages · {session.dist} m · HRmax {session.hrMax}
           {session.temp ? ` · ${session.temp}` : ""}
           {session.wind ? ` · ${session.wind}` : ""}
+          {session.rest ? ` · rest ${session.rest.lact}` : ""}
+          {session.baseline ? ` · baseline ${session.baseline.lact}` : ""}
         </div>
         {session.notes && (
           <div className="lt-note" style={{ marginTop: 10 }}>{session.notes}</div>
@@ -151,6 +157,22 @@ export default function Review() {
             </tr>
           </thead>
           <tbody>
+            {[["rest", session.rest], ["baseline", session.baseline]].map(([k, v]) =>
+              !v ? null : (
+                <tr key={k} style={{ opacity: 0.8 }}>
+                  <td style={{ textTransform: "capitalize" }}>{k}</td>
+                  <td className="lt-mono">—</td>
+                  <td className="lt-mono">—</td>
+                  <td className="lt-mono">{v.hr ?? "—"}</td>
+                  <td className="lt-mono">
+                    {v.hr && session.hrMax ? `${Math.round((v.hr / session.hrMax) * 100)}%` : "—"}
+                  </td>
+                  <td className="lt-mono" style={{ color: lactColor(+v.lact), fontWeight: 700 }}>
+                    {(+v.lact).toFixed(1)}
+                  </td>
+                </tr>
+              )
+            )}
             {rows.map((r) => (
               <tr key={r.n}>
                 <td className="lt-mono">{r.n}</td>
@@ -161,7 +183,7 @@ export default function Review() {
                   {r.hr && session.hrMax ? `${Math.round((r.hr / session.hrMax) * 100)}%` : "—"}
                 </td>
                 <td className="lt-mono" style={{ color: lactColor(r.lactate), fontWeight: 700 }}>
-                  {r.lactate ?? "—"}
+                  {r.lactate != null ? r.lactate.toFixed(1) : "—"}
                 </td>
               </tr>
             ))}

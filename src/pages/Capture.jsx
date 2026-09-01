@@ -18,7 +18,10 @@ const blank = (target) => ({ target, hr: "", min: "", sec: "", lact: "", note: "
 export default function Capture() {
   const nav = useNavigate();
 
-  const [phase, setPhase] = useState("setup"); // setup | stage | rest | done
+  // setup -> prerest -> warmup -> prebaseline -> stage <-> rest -> done
+  // "rest" is the recovery between stages; "prerest" is the cold resting
+  // lactate reading taken before the warm-up. Different things.
+  const [phase, setPhase] = useState("setup");
   const [athlete, setAthlete] = useState("");
   const [hrMax, setHrMax] = useState(175);
   const [dist, setDist] = useState(2400);
@@ -28,6 +31,14 @@ export default function Capture() {
     label: "", temp: "", wind: "", notes: "",
   });
 
+  const [warmupLen, setWarmupLen] = useState(600); // 10 min warm-up
+  /* Rest and baseline are single readings taken before the test, not
+     stages — no distance, no pace. Exactly one of each per test, so they
+     live as their own fields rather than as rows. */
+  const [pre, setPre] = useState({
+    rest: { hr: "", lact: "", note: "" },
+    baseline: { hr: "", lact: "", note: "" },
+  });
   const [stages, setStages] = useState([]);
   const [idx, setIdx] = useState(0);
   const [left, setLeft] = useState(0);
@@ -54,7 +65,9 @@ export default function Capture() {
     const d = pendingDraft;
     if (!d) return;
     setAthlete(d.athlete ?? ""); setHrMax(d.hrMax); setDist(d.dist);
-    setRestLen(d.restLen ?? 90); setMeta(d.meta); setStages(d.stages);
+    setRestLen(d.restLen ?? 90); setWarmupLen(d.warmupLen ?? 600);
+    setMeta(d.meta); setStages(d.stages);
+    if (d.pre) setPre(d.pre);
     setIdx(d.idx ?? 0); setPhase(d.phase === "rest" ? "stage" : d.phase ?? "stage");
     setPendingDraft(null);
     setResumed(true);
@@ -68,8 +81,8 @@ export default function Capture() {
   /* ---- autosave every change once underway ---- */
   useEffect(() => {
     if (phase === "setup" || phase === "done") return;
-    saveDraft({ athlete, hrMax, dist, restLen, meta, stages, idx, phase });
-  }, [athlete, hrMax, dist, restLen, meta, stages, idx, phase]);
+    saveDraft({ athlete, hrMax, dist, restLen, warmupLen, meta, pre, stages, idx, phase });
+  }, [athlete, hrMax, dist, restLen, warmupLen, meta, pre, stages, idx, phase]);
 
   /* ---- rest timer ---- */
   useEffect(() => {
@@ -94,7 +107,9 @@ export default function Capture() {
 
   // focus the first input whenever a new stage opens — keyboard-first
   useEffect(() => {
-    if (phase === "stage") firstField.current?.focus();
+    if (phase === "stage" || phase === "prerest" || phase === "prebaseline") {
+      firstField.current?.focus();
+    }
   }, [phase, idx]);
 
   const rows = useMemo(() => deriveRows(stages, dist), [stages, dist]);
@@ -112,7 +127,18 @@ export default function Capture() {
     const m = +hrMax || 175;
     setStages(OFFSETS.map((o) => blank(m - o)));
     setIdx(0);
-    setPhase("stage");
+    setPhase("prerest");
+  }
+
+  function setPreField(which, k, v) {
+    setPre((p) => ({ ...p, [which]: { ...p[which], [k]: v } }));
+  }
+
+  function beginWarmup() {
+    beeped.current = false;
+    setLeft(+warmupLen || 600);
+    setRunning(true);
+    setPhase("warmup");
   }
 
   /* Log the current stage. Last stage -> results; otherwise start rest. */
@@ -138,13 +164,31 @@ export default function Capture() {
 
   /* Add a stage mid-test — you have seen the curve and decided you have
      not bracketed the threshold yet. The "of N" label follows along. */
-  function addStage() {
+  function addStageAfter() {
     setStages((p) => [...p, blank((p[p.length - 1]?.target ?? +hrMax - 8) + 8)]);
+  }
+
+  /* A stage below the current opener, for an athlete whose curve starts
+     lower than the default ladder assumes.
+
+     Where the pointer lands depends on where you are. On stage 1 the
+     point is to run the easier stage first, so stay put and let it
+     become the new stage 1. Further in, the intent is to extend the
+     ladder downward without losing your place, so move with it. */
+  function addStageBefore() {
+    setStages((p) => [blank((p[0]?.target ?? +hrMax - 48) - 8), ...p]);
+    if (idx > 0) setIdx((i) => i + 1);
   }
 
   function removeLastStage() {
     if (stages.length <= 1 || idx >= stages.length - 1) return;
     setStages((p) => p.slice(0, -1));
+  }
+
+  function removeFirstStage() {
+    if (stages.length <= 1 || idx === 0) return;
+    setStages((p) => p.slice(1));
+    setIdx((i) => Math.max(0, i - 1));
   }
 
   async function finish() {
@@ -156,6 +200,11 @@ export default function Capture() {
       hrMax: +hrMax,
       dist: +dist,
       temp: meta.temp, wind: meta.wind, notes: meta.notes,
+      // pre-test readings: rest taken cold, baseline after the warm-up
+      rest: pre.rest.lact === "" ? null
+        : { hr: pre.rest.hr === "" ? null : +pre.rest.hr, lact: pre.rest.lact, note: pre.rest.note },
+      baseline: pre.baseline.lact === "" ? null
+        : { hr: pre.baseline.hr === "" ? null : +pre.baseline.hr, lact: pre.baseline.lact, note: pre.baseline.note },
       // store raw stage input only — paces are derived from sec + dist
       rows: stages
         .filter((s) => s.hr !== "" && s.lact !== "" && (s.min !== "" || s.sec !== ""))
@@ -193,8 +242,9 @@ export default function Capture() {
         <div className="lt-eyebrow">New capture</div>
         <div className="lt-h1">Set up the test</div>
         <div className="lt-sub" style={{ marginBottom: 16 }}>
-          Six stages by default, each {dist} m, targets stepping up to HRmax.
-          You can add more once you see the curve.
+          Resting reading, then a {Math.round((+warmupLen || 600) / 60)} min warm-up and a
+          baseline reading, then six stages of {dist} m stepping up to HRmax.
+          You can add stages at either end once you see the curve.
         </div>
 
         <div className="lt-grid lt-g2">
@@ -217,6 +267,10 @@ export default function Capture() {
           <Field label="Rest between stages (s)">
             <input className="lt-input lt-mono" type="number" value={restLen}
                    onChange={(e) => setRestLen(e.target.value)} />
+          </Field>
+          <Field label="Warm-up (s)">
+            <input className="lt-input lt-mono" type="number" value={warmupLen}
+                   onChange={(e) => setWarmupLen(e.target.value)} />
           </Field>
           <Field label="Label">
             <input className="lt-input" value={meta.label} placeholder="optional"
@@ -251,6 +305,58 @@ export default function Capture() {
           <div className="lt-card lt-note" style={{ marginTop: 14, borderColor: C.signal }}>
             Resumed an interrupted test.
           </div>
+        )}
+
+        {phase === "prerest" && (
+          <PreReading
+            eyebrow="Before the test · 1 of 2"
+            title="Resting lactate"
+            blurb="Taken cold, before any warm-up. Athlete seated and settled."
+            value={pre.rest}
+            onChange={(k, v) => setPreField("rest", k, v)}
+            onSkip={beginWarmup}
+            onNext={beginWarmup}
+            nextLabel="Record → warm-up"
+            firstRef={firstField}
+          />
+        )}
+
+        {phase === "warmup" && (
+          <div className="lt-card" style={{ marginTop: 14 }}>
+            <div className="lt-eyebrow">Warm-up · baseline reading next</div>
+            <div className="lt-timer">
+              <div className="lt-timer-n"
+                   style={{ color: left === 0 ? C.signal : left <= 30 ? C.warm : C.ink }}>
+                {Math.floor(left / 60)}:{pad(left % 60)}
+              </div>
+              <div className="lt-timer-l">
+                {left === 0 ? "Warm-up done — take the baseline reading" : "Athlete warming up"}
+              </div>
+            </div>
+            <div className="lt-foot">
+              <button className="lt-btn lt-btn-ghost" onClick={() => setRunning(!running)}>
+                {running ? "Pause" : "Resume"}
+              </button>
+              <button className="lt-btn lt-btn-primary" style={{ flex: 2 }}
+                      onClick={() => { setRunning(false); setPhase("prebaseline"); }}>
+                {left === 0 ? "Baseline reading" : "Skip warm-up → baseline"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === "prebaseline" && (
+          <PreReading
+            eyebrow="Before the test · 2 of 2"
+            title="Baseline lactate"
+            blurb="Taken after the warm-up, immediately before stage 1."
+            value={pre.baseline}
+            onChange={(k, v) => setPreField("baseline", k, v)}
+            onSkip={() => setPhase("stage")}
+            onNext={() => setPhase("stage")}
+            nextLabel="Record → stage 1"
+            firstRef={firstField}
+          />
         )}
 
         {phase === "stage" && cur && (
@@ -396,7 +502,16 @@ export default function Capture() {
       <div className="lt-card" style={{ marginTop: 14 }}>
         <div className="lt-card-t" style={{ display: "flex", justifyContent: "space-between" }}>
           <span>Curve so far</span>
-          <button className="lt-linkbtn" onClick={addStage}>+ add stage</button>
+          <span style={{ display: "flex", gap: 10 }}>
+            <button className="lt-linkbtn" onClick={addStageBefore}
+                    title="Add an easier stage below the current opener">
+              + stage before
+            </button>
+            <button className="lt-linkbtn" onClick={addStageAfter}
+                    title="Add a harder stage after the last">
+              + stage after
+            </button>
+          </span>
         </div>
 
         {logged.length < 2 ? (
@@ -433,6 +548,20 @@ export default function Capture() {
             <tr><th>#</th><th>target</th><th>time</th><th>pace/mi</th><th>HR</th><th>lactate</th></tr>
           </thead>
           <tbody>
+            {["rest", "baseline"].map((k) =>
+              pre[k].lact === "" ? null : (
+                <tr key={k} style={{ opacity: 0.75 }}>
+                  <td style={{ textTransform: "capitalize" }}>{k}</td>
+                  <td className="lt-mono">—</td>
+                  <td className="lt-mono">—</td>
+                  <td className="lt-mono">—</td>
+                  <td className="lt-mono">{pre[k].hr || "—"}</td>
+                  <td className="lt-mono" style={{ color: lactColor(+pre[k].lact), fontWeight: 700 }}>
+                    {(+pre[k].lact).toFixed(1)}
+                  </td>
+                </tr>
+              )
+            )}
             {rows.map((r, i) => (
               <tr key={r.n} style={{ opacity: i === idx && phase === "stage" ? 1 : 0.75 }}>
                 <td className="lt-mono">{r.n}{i === idx && phase === "stage" ? " ←" : ""}</td>
@@ -441,19 +570,71 @@ export default function Capture() {
                 <td className="lt-mono">{r.pace ?? "—"}</td>
                 <td className="lt-mono">{r.hr ?? "—"}</td>
                 <td className="lt-mono" style={{ color: lactColor(r.lactate), fontWeight: 700 }}>
-                  {r.lactate ?? "—"}
+                  {r.lactate != null ? r.lactate.toFixed(1) : "—"}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {stages.length > idx + 1 && (
-          <div style={{ textAlign: "right", marginTop: 6 }}>
-            <button className="lt-linkbtn" onClick={removeLastStage}>remove last stage</button>
-          </div>
-        )}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+          <span>
+            {idx > 0 && stages.length > 1 && (
+              <button className="lt-linkbtn" onClick={removeFirstStage}>remove first stage</button>
+            )}
+          </span>
+          <span>
+            {stages.length > idx + 1 && (
+              <button className="lt-linkbtn" onClick={removeLastStage}>remove last stage</button>
+            )}
+          </span>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/* Rest and baseline share a screen: a lactate value, an optional heart
+   rate, and a note. No time or distance — nothing is being run. */
+function PreReading({ eyebrow, title, blurb, value, onChange, onNext, onSkip, nextLabel, firstRef }) {
+  const ready = value.lact !== "";
+  return (
+    <div className="lt-card" style={{ marginTop: 14 }}>
+      <div className="lt-eyebrow">{eyebrow}</div>
+      <div className="lt-h1">{title}</div>
+      <div className="lt-sub" style={{ marginBottom: 14 }}>{blurb}</div>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (ready) onNext(); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && e.target.tagName === "INPUT" && ready) {
+            e.preventDefault();
+            onNext();
+          }
+        }}
+      >
+        <div className="lt-grid lt-g2">
+          <Field label="Lactate (mmol/L)">
+            <input ref={firstRef} className="lt-input lt-mono lt-big" type="number" step="0.1"
+                   inputMode="decimal" value={value.lact} placeholder="1.0"
+                   onChange={(e) => onChange("lact", e.target.value)} />
+          </Field>
+          <Field label="Heart rate (optional)">
+            <input className="lt-input lt-mono lt-big" type="number" inputMode="numeric"
+                   value={value.hr} placeholder="—"
+                   onChange={(e) => onChange("hr", e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Note (optional)">
+          <input className="lt-input" value={value.note} placeholder=""
+                 onChange={(e) => onChange("note", e.target.value)} />
+        </Field>
+        <div className="lt-foot" style={{ marginTop: 16 }}>
+          <button type="button" className="lt-btn lt-btn-ghost" onClick={onSkip}>Skip</button>
+          <button type="submit" className="lt-btn lt-btn-primary" disabled={!ready} style={{ flex: 2 }}>
+            {nextLabel}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
