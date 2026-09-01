@@ -22,6 +22,24 @@ const DRAFT_KEY = "lactate:draft";
 
 export const backend = () => (isConfigured ? "supabase" : "local");
 
+/* Anything that renders a summary of the stored set needs to hear when
+   that set changes — the masthead readout sits outside the page that
+   owns the data, so it cannot be told directly. Additive: no existing
+   behaviour depends on it, and a listener that throws is ignored so a
+   bad subscriber can never break a write. */
+const listeners = new Set();
+
+export function onStoreChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+function announce() {
+  for (const fn of listeners) {
+    try { fn(); } catch { /* a broken listener is not the writer's problem */ }
+  }
+}
+
 /* ---- local helpers ---- */
 
 function read(key, fallback) {
@@ -104,13 +122,16 @@ export async function saveSession(session) {
        ids are unique per save so there is nothing to update. */
     const { error } = await supabase.from("tests").insert(toRow(session));
     if (error) throw new Error(`Could not save test: ${error.message}`);
+    announce();
     return true;
   }
   const all = await getSessions();
   const i = all.findIndex((s) => String(s.id) === String(session.id));
   if (i >= 0) all[i] = session;
   else all.push(session);
-  return write(KEY, all);
+  const ok = write(KEY, all);
+  announce();
+  return ok;
 }
 
 /* Deleting needs the password, and the check happens inside Postgres.
@@ -131,10 +152,13 @@ export async function deleteSession(id, password) {
           : `Could not delete test: ${error.message}`
       );
     }
+    announce();
     return true;
   }
   const all = await getSessions();
-  return write(KEY, all.filter((s) => String(s.id) !== String(id)));
+  const ok = write(KEY, all.filter((s) => String(s.id) !== String(id)));
+  announce();
+  return ok;
 }
 
 /* Whether a delete will ask for a password. Local storage has nothing
@@ -176,6 +200,7 @@ export async function importAll(payload) {
       .from("tests")
       .upsert(payload.sessions.map(toRow), { ignoreDuplicates: true });
     if (error) throw new Error(`Could not import: ${error.message}`);
+    announce();
     return true;
   }
   const existing = await getSessions();
@@ -204,5 +229,6 @@ export async function migrateLocalToRemote() {
     .from("tests")
     .upsert(local.map(toRow), { ignoreDuplicates: true });
   if (error) throw new Error(`Could not migrate: ${error.message}`);
+  announce();
   return local.length;
 }
