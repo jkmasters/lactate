@@ -22,8 +22,12 @@ that adding a method later can be re-run against every historical test.
 | base +1.0 | baseline + 1.0 mmol, interpolated to HR |
 | OBLA 4.0 | fixed 4 mmol, interpolated to HR and pace |
 
-Baseline is the lower of the first two stages. Dmax and log-log are not
-implemented.
+Baseline is the lowest of the first three stages — lactate often dips at
+stage 2 or 3 as clearance catches up, and a three-stage window catches
+that. The pre-test rest and baseline readings are recorded for reference
+but do not feed the threshold math.
+
+Dmax and log-log are not implemented.
 
 ## Running it
 

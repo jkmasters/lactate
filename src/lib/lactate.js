@@ -58,15 +58,23 @@ export function interpAt(rows, target, key) {
      - OBLA 4.0 fixed 4 mmol, interpolated to HR and pace
      - base+1   baseline + 1.0 mmol, interpolated to HR
 
-   Baseline is the lower of the first two stages, which assumes the
-   test opens easy enough that stage 1 or 2 is genuinely aerobic. */
+   Baseline is the lowest of the first three stages. Lactate often dips
+   slightly at stage 2 or 3 as clearance catches up with production, so
+   looking across three stages catches a genuine low that a two-stage
+   window would miss.
+
+   The pre-test rest and baseline readings are deliberately NOT used
+   here. Resting lactate is taken cold and sits well below anything
+   measured under load; letting it set the baseline would drag LT1 down
+   and make thresholds incomparable with tests recorded before those
+   readings existed. They are recorded for reference, not for the math. */
 export function analyze(rows) {
   const done = rows
     .filter((r) => r.lactate != null && r.hr != null && r.sec)
     .sort((a, b) => a.hr - b.hr);
   if (done.length < 3) return null;
 
-  const base = Math.min(...done.slice(0, 2).map((r) => r.lactate));
+  const base = Math.min(...done.slice(0, 3).map((r) => r.lactate));
 
   // LT1: first stage rising >= 0.4 mmol above the running baseline
   let lt1 = null;
