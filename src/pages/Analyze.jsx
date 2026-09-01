@@ -8,7 +8,10 @@ import {
   getSessions, deleteSession, deleteNeedsPassword, exportAll, backend,
   getLocalSessions, migrateLocalToRemote,
 } from "../lib/storage.js";
-import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
+import {
+  analyze, deriveRows, minToPace, pad,
+  convertPace, formatPaceValue, unitLabel,
+} from "../lib/lactate.js";
 import { C } from "../theme.js";
 
 const SERIES = [C.signal, C.cool, C.warm, C.hot, "#8E7CC3", "#6FBF73"];
@@ -29,14 +32,12 @@ const LT1_METHODS = {
    threshold is an intensity — the lactate value at it is incidental, and
    with a fixed method like OBLA every test would share one horizontal
    line anyway. */
-function thresholdMarks(session, method, xMode, lt1Method = "delta") {
+function thresholdMarks(session, method, xMode, lt1Method, unit, rate) {
   const r = analyze(deriveRows(session.rows ?? [], session.dist));
   if (!r) return { lt1: null, lt2: null };
 
   const asX = (hr, perMileSec) =>
-    xMode === "hr"
-      ? (hr ?? null)
-      : perMileSec != null ? perMileSec / 60 : null;
+    xMode === "hr" ? (hr ?? null) : convertPace(perMileSec, unit, rate);
 
   const lt1src =
     lt1Method === "loglog" ? r.logLog
@@ -71,6 +72,8 @@ export default function Analyze() {
   const [method, setMethod] = useState("obla");      // obla | dmax | moddmax
   const [lt1Method, setLt1Method] = useState("delta"); // delta | loglog
   const [xMode, setXMode] = useState("hr");    // hr | pace
+  const [unit, setUnit] = useState("mi");      // mi | km
+  const [rate, setRate] = useState("pace");    // pace | speed
 
   function load() {
     setError(null);
@@ -227,7 +230,8 @@ export default function Analyze() {
         </div>
       )}
       <div className="lt-analyze">
-        {/* ---- left: the list you tick ---- */}
+        {/* ---- left: the list you click ---- */}
+        <div>
         <div className="lt-card" style={{ marginTop: 14 }}>
           <div className="lt-card-t" style={{ display: "flex", justifyContent: "space-between" }}>
             <span>Tests · {visible.length}</span>
@@ -263,8 +267,12 @@ export default function Analyze() {
               const on = picked.has(String(s.id));
               const colour = SERIES[chosen.findIndex((c) => String(c.id) === String(s.id)) % SERIES.length];
               return (
-                <div key={s.id} className={`lt-item ${on ? "on" : ""}`}>
-                  <label className="lt-check">
+                <div key={s.id} className={`lt-item ${on ? "on" : ""}`}
+                     onClick={() => toggle(s.id)} role="button" tabIndex={0}
+                     onKeyDown={(e) => {
+                       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(s.id); }
+                     }}>
+                  <label className="lt-check" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={on} onChange={() => toggle(s.id)} />
                     <span
                       className="lt-swatch"
@@ -283,7 +291,7 @@ export default function Analyze() {
                       </div>
                     )}
                   </div>
-                  <div className="lt-item-acts">
+                  <div className="lt-item-acts" onClick={(e) => e.stopPropagation()}>
                     <Link className="lt-linkbtn" to={`/review/${s.id}`}>open</Link>
                     <button className="lt-linkbtn danger" onClick={() => remove(s)}>del</button>
                   </div>
@@ -292,17 +300,18 @@ export default function Analyze() {
             })}
           </div>
 
-          <div className="lt-note" style={{ marginTop: 10, fontSize: 10 }}>
+        </div>
+
+        {/* backend note and export sit outside the selector, which is
+            now only for choosing tests */}
+        <div className="lt-underlist">
+          <span className="lt-note" style={{ fontSize: 10 }}>
             {backend() === "supabase"
               ? "Saving to the shared database"
               : "Saving to this browser only"}
-          </div>
-          <div className="lt-foot" style={{ marginTop: 8 }}>
-            <button className="lt-btn lt-btn-ghost" onClick={download}>Export all (JSON)</button>
-            <button className="lt-btn lt-btn-primary" onClick={() => nav("/capture")} style={{ flex: 2 }}>
-              New capture
-            </button>
-          </div>
+          </span>
+          <button className="lt-linkbtn" onClick={download}>export all (JSON)</button>
+        </div>
         </div>
 
         {/* ---- right: the two lenses ---- */}
@@ -326,10 +335,12 @@ export default function Analyze() {
           ) : lens === "overlay" ? (
             <Overlay sessions={chosen} xMode={xMode} setXMode={setXMode}
                      method={method} setMethod={setMethod}
-                     lt1Method={lt1Method} setLt1Method={setLt1Method} />
+                     lt1Method={lt1Method} setLt1Method={setLt1Method}
+                     unit={unit} setUnit={setUnit} rate={rate} setRate={setRate} />
           ) : (
             <Trend sessions={chosen} method={method} setMethod={setMethod}
-                   lt1Method={lt1Method} setLt1Method={setLt1Method} />
+                   lt1Method={lt1Method} setLt1Method={setLt1Method}
+                   unit={unit} rate={rate} />
           )}
         </div>
       </div>
@@ -339,29 +350,72 @@ export default function Analyze() {
 
 /* Curves on shared axes. Uncapped — the artifact could only ever
    compare the last three. */
-function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setLt1Method }) {
+function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setLt1Method,
+                  unit, setUnit, rate, setRate }) {
   const series = sessions.map((s) => ({
     id: String(s.id),
     name: s.label || s.date,
     points: deriveRows(s.rows ?? [], s.dist)
       .filter((r) => r.lactate != null && (xMode === "hr" ? r.hr != null : r.perMileSec != null))
-      .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, y: r.lactate })),
-    marks: thresholdMarks(s, method, xMode, lt1Method),
+      .map((r) => ({
+        x: xMode === "hr" ? r.hr : convertPace(r.perMileSec, unit, rate),
+        y: r.lactate,
+      })),
+    marks: thresholdMarks(s, method, xMode, lt1Method, unit, rate),
   }));
+
+  /* Pace runs fast-to-slow so the axis is reversed; speed does not. */
+  const reversed = xMode === "pace" && rate === "pace";
+  const fmtX = (v) =>
+    xMode === "hr" ? Math.round(v) : formatPaceValue(v, rate);
+
+  /* Axis padding has to match the unit. A flat +/-2 is a couple of beats
+     on the HR axis but two whole minutes on a pace axis, which flattened
+     every curve into the middle of the chart. */
+  const pad_ = xMode === "hr" ? 2 : rate === "speed" ? 0.4 : 0.15;
 
   return (
     <>
-      <div className="lt-seg sm" style={{ marginBottom: 6 }}>
-        <button className={`lt-seg-b ${xMode === "hr" ? "on" : ""}`} onClick={() => setXMode("hr")}>
-          vs heart rate
-        </button>
-        <button className={`lt-seg-b ${xMode === "pace" ? "on" : ""}`} onClick={() => setXMode("pace")}>
-          vs pace
-        </button>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+        <div>
+          <div className="lt-picker-l">Axis</div>
+          <div className="lt-seg sm">
+            <button className={`lt-seg-b ${xMode === "hr" ? "on" : ""}`} onClick={() => setXMode("hr")}>
+              heart rate
+            </button>
+            <button className={`lt-seg-b ${xMode === "pace" ? "on" : ""}`} onClick={() => setXMode("pace")}>
+              {rate === "speed" ? "speed" : "pace"}
+            </button>
+          </div>
+        </div>
+        <div>
+          <div className="lt-picker-l">Distance</div>
+          <div className="lt-seg sm">
+            <button className={`lt-seg-b ${unit === "mi" ? "on" : ""}`} onClick={() => setUnit("mi")}>
+              miles
+            </button>
+            <button className={`lt-seg-b ${unit === "km" ? "on" : ""}`} onClick={() => setUnit("km")}>
+              km
+            </button>
+          </div>
+        </div>
+        <div>
+          <div className="lt-picker-l">Shown as</div>
+          <div className="lt-seg sm">
+            <button className={`lt-seg-b ${rate === "pace" ? "on" : ""}`} onClick={() => setRate("pace")}>
+              pace
+            </button>
+            <button className={`lt-seg-b ${rate === "speed" ? "on" : ""}`} onClick={() => setRate("speed")}>
+              speed
+            </button>
+          </div>
+        </div>
       </div>
       <MethodPicker method={method} setMethod={setMethod}
                     lt1Method={lt1Method} setLt1Method={setLt1Method} />
-      <div className="lt-note" style={{ fontSize: 10, marginBottom: 6 }}>
+      <ThresholdTiles sessions={sessions} method={method} lt1Method={lt1Method}
+                      unit={unit} rate={rate} />
+      <div className="lt-note" style={{ fontSize: 10, margin: "10px 0 6px" }}>
         LT1 dotted ({LT1_METHODS[lt1Method].name}) · LT2 dashed ({METHODS[method].name}),
         coloured to match each test
       </div>
@@ -372,10 +426,13 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
             <XAxis
               type="number"
               dataKey="x"
-              domain={["dataMin - 2", "dataMax + 2"]}
-              reversed={xMode === "pace"}
+              domain={[
+                (min) => min - pad_,
+                (max) => max + pad_,
+              ]}
+              reversed={reversed}
               tick={{ fill: C.muted, fontSize: 11 }}
-              tickFormatter={(v) => (xMode === "hr" ? Math.round(v) : minToPace(v))}
+              tickFormatter={fmtX}
             />
             <YAxis
               tick={{ fill: C.muted, fontSize: 11 }}
@@ -383,7 +440,8 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
             />
             <Tooltip
               contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
-              labelFormatter={(v) => (xMode === "hr" ? `${Math.round(v)} bpm` : `${minToPace(v)}/mi`)}
+              labelFormatter={(v) =>
+                xMode === "hr" ? `${Math.round(v)} bpm` : `${fmtX(v)} ${unitLabel(unit, rate)}`}
               formatter={(val, name) => [`${val} mmol/L`, name]}
             />
             <Legend wrapperStyle={{ fontSize: 11, color: C.muted, paddingTop: 6 }}
@@ -426,7 +484,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
 
 /* Thresholds over time — the view that needed a backend, and the
    reason any of this is worth keeping. */
-function Trend({ sessions, method, setMethod, lt1Method, setLt1Method }) {
+function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rate }) {
   const data = [...sessions]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((s) => {
@@ -436,13 +494,15 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method }) {
       const th =
         method === "dmax" ? r?.dmax
         : method === "moddmax" ? r?.modDmax
-        : r ? { hr: r.hr4, pace: r.pace4 } : null;
+        : r?.hr4 != null
+          ? { hr: r.hr4, perMileSec: r.pace4 ? paceToMin(r.pace4) * 60 : null }
+          : null;
       return {
         date: s.date,
         label: s.label || s.date,
         hr4: th?.hr ?? null,
         hrLt1: lt1Method === "loglog" ? (r?.logLog?.hr ?? null) : (r?.lt1?.to?.hr ?? null),
-        pace4: th?.pace ? paceToMin(th.pace) : null,
+        pace4: convertPace(th?.perMileSec, unit, rate),
       };
     });
 
@@ -476,25 +536,98 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method }) {
           <YAxis
             yAxisId="pace"
             orientation="right"
-            reversed
-            domain={[(min) => min - 0.25, (max) => max + 0.25]}
+            reversed={rate === "pace"}
+            domain={[(min) => min - (rate === "speed" ? 0.4 : 0.25),
+                     (max) => max + (rate === "speed" ? 0.4 : 0.25)]}
             tick={{ fill: C.muted, fontSize: 11 }}
-            tickFormatter={minToPace}
-            label={{ value: "min/mi", angle: 90, position: "insideRight", fill: C.dim, fontSize: 11 }}
+            tickFormatter={(v) => formatPaceValue(v, rate)}
+            label={{ value: unitLabel(unit, rate), angle: 90, position: "insideRight",
+                     fill: C.dim, fontSize: 11 }}
           />
           <Tooltip
             contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
-            formatter={(v, n) => (String(n).startsWith("Pace") ? [`${minToPace(v)}/mi`, n] : [`${v} bpm`, n])}
+            formatter={(v, n) =>
+              String(n).startsWith("Pace")
+                ? [`${formatPaceValue(v, rate)} ${unitLabel(unit, rate)}`, n]
+                : [`${v} bpm`, n]}
           />
           <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
           <Line yAxisId="hr" dataKey="hrLt1" name={`HR at LT1 ${LT1_METHODS[lt1Method].name} (bpm)`} stroke={C.cool}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
           <Line yAxisId="hr" dataKey="hr4" name={`HR at ${METHODS[method].name} (bpm)`} stroke={C.hot}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
-          <Line yAxisId="pace" dataKey="pace4" name={`Pace at ${METHODS[method].name} (min/mi)`} stroke={C.signal}
+          <Line yAxisId="pace" dataKey="pace4" name={`${rate === "speed" ? "Speed" : "Pace"} at ${METHODS[method].name} (${unitLabel(unit, rate)})`} stroke={C.signal}
                 strokeWidth={3} dot={{ r: 4 }} connectNulls isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
+      </div>
+    </>
+  );
+}
+
+/* Big numbers for the selected test. With several ticked these read off
+   the most recent, and show the change against the oldest — the number
+   you actually want is "has it moved", not six figures at once. */
+function ThresholdTiles({ sessions, method, lt1Method, unit, rate }) {
+  const byDate = [...sessions].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const newest = byDate[byDate.length - 1];
+  const oldest = byDate.length > 1 ? byDate[0] : null;
+
+  const read = (sess) => {
+    if (!sess) return null;
+    const r = analyze(deriveRows(sess.rows ?? [], sess.dist));
+    if (!r) return null;
+    const lt1 = lt1Method === "loglog"
+      ? r.logLog
+      : r.lt1 ? { hr: r.lt1.to.hr, perMileSec: r.lt1.to.perMileSec } : null;
+    const lt2 = method === "dmax" ? r.dmax
+      : method === "moddmax" ? r.modDmax
+      : r.hr4 != null
+        ? { hr: r.hr4, perMileSec: r.pace4 ? paceToMin(r.pace4) * 60 : null }
+        : null;
+    return { lt1, lt2 };
+  };
+
+  const now = read(newest);
+  const then = read(oldest);
+  if (!now) return null;
+
+  const label = unitLabel(unit, rate);
+
+  const tile = (title, method_, cur, prev) => {
+    const pace = cur ? convertPace(cur.perMileSec, unit, rate) : null;
+    const prevPace = prev ? convertPace(prev.perMileSec, unit, rate) : null;
+    /* Faster is a lower number for pace and a higher one for speed. */
+    const better = pace != null && prevPace != null
+      ? (rate === "speed" ? pace > prevPace : pace < prevPace)
+      : null;
+    const delta = pace != null && prevPace != null ? Math.abs(pace - prevPace) : null;
+    return (
+      <div className="lt-tile">
+        <div className="lt-tile-h">
+          {title} <span className="lt-tile-m">{method_}</span>
+        </div>
+        <div className="lt-tile-v lt-mono">{formatPaceValue(pace, rate)}</div>
+        <div className="lt-tile-u">{label}</div>
+        <div className="lt-tile-hr lt-mono">{cur?.hr != null ? `${cur.hr} bpm` : "— bpm"}</div>
+        {delta != null && delta > 0.001 && (
+          <div className="lt-tile-d" style={{ color: better ? C.cool : C.warm }}>
+            {better ? "▲" : "▼"} {rate === "speed" ? delta.toFixed(1) : minToPace(delta)} vs {oldest.date}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="lt-tile-cap lt-mono">
+        {newest.label || newest.date}
+        {byDate.length > 1 ? ` · most recent of ${byDate.length} selected` : ""}
+      </div>
+      <div className="lt-tiles">
+        {tile("Est. LT1", LT1_METHODS[lt1Method].name, now.lt1, then?.lt1)}
+        {tile("Est. LT2", METHODS[method].name, now.lt2, then?.lt2)}
       </div>
     </>
   );

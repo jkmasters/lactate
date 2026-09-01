@@ -379,3 +379,40 @@ function lt1LogLog(rows, hr4) {
   }
   return { logLog: ll, logLogNote: null };
 }
+
+/* ------------------------------------------------------------------ *
+ *  Units
+ *
+ *  Everything is stored as seconds per mile and converted on the way
+ *  out — pace or speed, miles or kilometres. Nothing is persisted in
+ *  display units, so switching never touches the data.
+ * ------------------------------------------------------------------ */
+
+export const UNIT_LABEL = {
+  "mi-pace": "min/mi",
+  "km-pace": "min/km",
+  "mi-speed": "mph",
+  "km-speed": "km/h",
+};
+
+export const unitLabel = (unit, rate) => UNIT_LABEL[`${unit}-${rate}`];
+
+/* Numeric value for plotting. Pace comes back as decimal minutes so it
+   can share an axis with minToPace; speed as its own unit per hour. */
+export function convertPace(perMileSec, unit, rate) {
+  if (perMileSec == null || !Number.isFinite(perMileSec)) return null;
+  const v = MILE_M / perMileSec; // m/s
+  if (rate === "speed") return unit === "mi" ? v * 2.2369363 : v * 3.6;
+  const secs = unit === "mi" ? perMileSec : (perMileSec * 1000) / MILE_M;
+  return secs / 60;
+}
+
+export function formatPaceValue(value, rate) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return rate === "speed" ? value.toFixed(1) : minToPace(value);
+}
+
+/* Convenience: straight from stored seconds-per-mile to a display string. */
+export function displayPace(perMileSec, unit, rate) {
+  return formatPaceValue(convertPace(perMileSec, unit, rate), rate);
+}
