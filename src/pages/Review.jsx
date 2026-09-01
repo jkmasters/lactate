@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from "recharts";
-import { getSession, deleteSession } from "../lib/storage.js";
+import { getSession, deleteSession, deleteNeedsPassword } from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
 import { C, lactColor } from "../theme.js";
 
@@ -52,9 +52,15 @@ export default function Review() {
     .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, lactate: r.lactate }));
 
   async function remove() {
-    if (!confirm(`Delete "${session.label || session.date}"? This cannot be undone.`)) return;
+    let pw;
+    if (deleteNeedsPassword()) {
+      pw = prompt(`Delete "${session.label || session.date}"?\n\nThis cannot be undone. Enter the delete password:`);
+      if (pw === null) return;
+    } else if (!confirm(`Delete "${session.label || session.date}"? This cannot be undone.`)) {
+      return;
+    }
     try {
-      await deleteSession(session.id);
+      await deleteSession(session.id, pw);
       nav("/");
     } catch (e) {
       setError(e.message);

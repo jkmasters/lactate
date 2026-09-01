@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { getSessions, deleteSession, exportAll, backend } from "../lib/storage.js";
+import { getSessions, deleteSession, deleteNeedsPassword, exportAll, backend } from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
 import { C } from "../theme.js";
 
@@ -69,9 +69,18 @@ export default function Analyze() {
   }
 
   async function remove(s) {
-    if (!confirm(`Delete "${s.label || s.date}"? This cannot be undone.`)) return;
+    /* A blocking prompt is right here in a way it was not for the resume
+       banner: this is rare, deliberate and irreversible, and stopping the
+       world is the point. */
+    let pw;
+    if (deleteNeedsPassword()) {
+      pw = prompt(`Delete "${s.label || s.date}"?\n\nThis cannot be undone. Enter the delete password:`);
+      if (pw === null) return;
+    } else if (!confirm(`Delete "${s.label || s.date}"? This cannot be undone.`)) {
+      return;
+    }
     try {
-      await deleteSession(s.id);
+      await deleteSession(s.id, pw);
       setSessions((prev) => prev.filter((x) => String(x.id) !== String(s.id)));
     } catch (e) {
       setError(e.message);

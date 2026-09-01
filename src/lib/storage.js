@@ -100,7 +100,9 @@ export async function getSession(id) {
 
 export async function saveSession(session) {
   if (isConfigured) {
-    const { error } = await supabase.from("tests").upsert(toRow(session));
+    /* insert, not upsert: anon has no UPDATE permission by design, and
+       ids are unique per save so there is nothing to update. */
+    const { error } = await supabase.from("tests").insert(toRow(session));
     if (error) throw new Error(`Could not save test: ${error.message}`);
     return true;
   }
@@ -111,15 +113,33 @@ export async function saveSession(session) {
   return write(KEY, all);
 }
 
-export async function deleteSession(id) {
+/* Deleting needs the password, and the check happens inside Postgres.
+   anon holds no DELETE permission on the table at all, so there is no
+   route around this one — not through the UI, and not through the REST
+   API with the public key. The password is typed at the point of use
+   and never ends up in the bundle. */
+export async function deleteSession(id, password) {
   if (isConfigured) {
-    const { error } = await supabase.from("tests").delete().eq("id", id);
-    if (error) throw new Error(`Could not delete test: ${error.message}`);
+    const { error } = await supabase.rpc("delete_test", {
+      test_id: id,
+      pass: password ?? "",
+    });
+    if (error) {
+      throw new Error(
+        /wrong password/i.test(error.message)
+          ? "Wrong password — nothing was deleted."
+          : `Could not delete test: ${error.message}`
+      );
+    }
     return true;
   }
   const all = await getSessions();
   return write(KEY, all.filter((s) => String(s.id) !== String(id)));
 }
+
+/* Whether a delete will ask for a password. Local storage has nothing
+   to protect against, so it does not. */
+export const deleteNeedsPassword = () => isConfigured;
 
 /* ---- in-progress draft — always local ---- */
 
@@ -152,7 +172,9 @@ export async function importAll(payload) {
     throw new Error("Not a recognised export file");
   }
   if (isConfigured) {
-    const { error } = await supabase.from("tests").upsert(payload.sessions.map(toRow));
+    const { error } = await supabase
+      .from("tests")
+      .upsert(payload.sessions.map(toRow), { ignoreDuplicates: true });
     if (error) throw new Error(`Could not import: ${error.message}`);
     return true;
   }
@@ -168,7 +190,9 @@ export async function migrateLocalToRemote() {
   if (!isConfigured) throw new Error("Supabase is not configured");
   const local = read(KEY, []);
   if (!Array.isArray(local) || !local.length) return 0;
-  const { error } = await supabase.from("tests").upsert(local.map(toRow));
+  const { error } = await supabase
+    .from("tests")
+    .upsert(local.map(toRow), { ignoreDuplicates: true });
   if (error) throw new Error(`Could not migrate: ${error.message}`);
   return local.length;
 }

@@ -66,12 +66,30 @@ connection never costs you a test that has already been run.
 ## Setup
 
 1. Create a Supabase project
-2. Run `supabase/schema.sql` in the SQL editor — **read the RLS warning
-   in it first**
+2. Run `supabase/schema.sql` in the SQL editor, then `supabase/harden.sql`
+   — change the password in `harden.sql` before running it
 3. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Netlify under
    Site configuration → Environment variables, and in `.env.local` for
    development
 4. Optionally set `VITE_PASSPHRASE` for the shared passphrase screen
+
+## Access
+
+The publishable key ships in the bundle, so what actually controls
+access is the row level security policy:
+
+| role | can |
+| --- | --- |
+| anon | read, insert |
+| anon | **not** update, **not** delete |
+
+Deleting goes through `delete_test()`, a `security definer` function that
+checks a password inside Postgres. The password is typed at the point of
+use, so it never enters the bundle — unlike the entry passphrase, which
+hides the UI and nothing more.
+
+Worst case with a leaked key is junk rows, which are recoverable.
+Destruction and tampering are not reachable.
 
 To move data recorded before the backend existed, call
 `migrateLocalToRemote()` from `src/lib/storage.js`, or use Export all
