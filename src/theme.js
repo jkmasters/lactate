@@ -207,6 +207,8 @@ export const captureCss = `
   border-radius:8px;padding:12px 14px;margin-bottom:16px;}
 .lt-resume-t{font-size:13px;font-weight:700;color:var(--signal);}
 .lt-resume-s{font-size:11px;color:var(--muted);margin-top:2px;}
+
+.lt-gate{display:flex;align-items:center;justify-content:center;min-height:80vh;}
 `;
 
 export const css = baseCss + navCss + analyzeCss + captureCss;

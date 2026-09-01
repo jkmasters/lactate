@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { getSessions, deleteSession, exportAll } from "../lib/storage.js";
+import { getSessions, deleteSession, exportAll, backend } from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
 import { C } from "../theme.js";
 
@@ -15,20 +15,29 @@ export default function Analyze() {
   const nav = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
   const [athlete, setAthlete] = useState("all");
   const [lens, setLens] = useState("overlay"); // overlay | trend
   const [xMode, setXMode] = useState("hr");    // hr | pace
 
-  useEffect(() => {
-    getSessions().then((s) => {
-      const sorted = [...s].sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      setSessions(sorted);
-      // preselect the two most recent so the page is useful on arrival
-      setPicked(new Set(sorted.slice(0, 2).map((x) => String(x.id))));
-      setLoaded(true);
-    });
-  }, []);
+  function load() {
+    setError(null);
+    getSessions()
+      .then((s) => {
+        const sorted = [...s].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        setSessions(sorted);
+        // preselect the two most recent so the page is useful on arrival
+        setPicked(new Set(sorted.slice(0, 2).map((x) => String(x.id))));
+        setLoaded(true);
+      })
+      .catch((e) => {
+        setError(e.message);
+        setLoaded(true);
+      });
+  }
+
+  useEffect(load, []);
 
   const athletes = useMemo(
     () => [...new Set(sessions.map((s) => s.athlete).filter(Boolean))].sort(),
@@ -61,8 +70,12 @@ export default function Analyze() {
 
   async function remove(s) {
     if (!confirm(`Delete "${s.label || s.date}"? This cannot be undone.`)) return;
-    await deleteSession(s.id);
-    setSessions((prev) => prev.filter((x) => String(x.id) !== String(s.id)));
+    try {
+      await deleteSession(s.id);
+      setSessions((prev) => prev.filter((x) => String(x.id) !== String(s.id)));
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   async function download() {
@@ -75,6 +88,24 @@ export default function Analyze() {
   }
 
   if (!loaded) return <div className="lt-card lt-note">Loading…</div>;
+
+  if (error) {
+    return (
+      <div className="lt-card" style={{ marginTop: 14, borderColor: C.hot }}>
+        <div className="lt-eyebrow" style={{ color: C.hot }}>Could not reach the database</div>
+        <div className="lt-h1">Saved tests are unavailable</div>
+        <div className="lt-sub" style={{ margin: "8px 0 6px" }}>{error}</div>
+        <div className="lt-note" style={{ marginBottom: 16 }}>
+          Capture still works — a test in progress is held on this device and
+          can be saved once the connection is back.
+        </div>
+        <div className="lt-foot">
+          <button className="lt-btn lt-btn-ghost" onClick={() => nav("/capture")}>New capture</button>
+          <button className="lt-btn lt-btn-primary" onClick={load} style={{ flex: 2 }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!sessions.length) {
     return (
@@ -158,7 +189,12 @@ export default function Analyze() {
             })}
           </div>
 
-          <div className="lt-foot" style={{ marginTop: 12 }}>
+          <div className="lt-note" style={{ marginTop: 10, fontSize: 10 }}>
+            {backend() === "supabase"
+              ? "Saving to the shared database"
+              : "Saving to this browser only"}
+          </div>
+          <div className="lt-foot" style={{ marginTop: 8 }}>
             <button className="lt-btn lt-btn-ghost" onClick={download}>Export all (JSON)</button>
             <button className="lt-btn lt-btn-primary" onClick={() => nav("/capture")} style={{ flex: 2 }}>
               New capture

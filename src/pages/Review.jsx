@@ -13,13 +13,26 @@ export default function Review() {
   const { id } = useParams();
   const nav = useNavigate();
   const [session, setSession] = useState(undefined); // undefined = loading
+  const [error, setError] = useState(null);
   const [xMode, setXMode] = useState("hr");
 
   useEffect(() => {
-    getSession(id).then(setSession);
+    getSession(id)
+      .then(setSession)
+      .catch((e) => { setError(e.message); setSession(null); });
   }, [id]);
 
   if (session === undefined) return <div className="lt-card lt-note">Loading…</div>;
+  if (error) {
+    return (
+      <div className="lt-card" style={{ marginTop: 14, borderColor: C.hot }}>
+        <div className="lt-eyebrow" style={{ color: C.hot }}>Could not reach the database</div>
+        <div className="lt-h1">Test unavailable</div>
+        <div className="lt-sub" style={{ margin: "8px 0 18px" }}>{error}</div>
+        <Link className="lt-btn lt-btn-primary" to="/">Back to all tests</Link>
+      </div>
+    );
+  }
   if (session === null) {
     return (
       <div className="lt-card" style={{ textAlign: "center", padding: "40px 20px" }}>
@@ -40,8 +53,12 @@ export default function Review() {
 
   async function remove() {
     if (!confirm(`Delete "${session.label || session.date}"? This cannot be undone.`)) return;
-    await deleteSession(session.id);
-    nav("/");
+    try {
+      await deleteSession(session.id);
+      nav("/");
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   function csv() {

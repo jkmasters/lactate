@@ -45,6 +45,8 @@ export default function Capture() {
   const [running, setRunning] = useState(false);
   const [resumed, setResumed] = useState(false);
   const [pendingDraft, setPendingDraft] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const beeped = useRef(false);
   const firstField = useRef(null);
 
@@ -213,9 +215,20 @@ export default function Capture() {
           hr: +s.hr, lact: s.lact, min: s.min, sec: s.sec,
         })),
     };
-    await saveSession(session);
-    await clearDraft();
-    nav(`/review/${session.id}`);
+    /* The athlete has already run the test by this point. If the save
+       fails the draft stays put, so the data survives a retry, a
+       refresh, or the connection coming back later. */
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveSession(session);
+      await clearDraft();
+      nav(`/review/${session.id}`);
+    } catch (e) {
+      setSaveError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   /* ---------------------------- setup ---------------------------- */
@@ -486,12 +499,23 @@ export default function Capture() {
               <input className="lt-input" value={meta.notes} placeholder="how it went"
                      onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
             </Field>
+            {saveError && (
+              <div className="lt-card" style={{ borderColor: C.hot, marginTop: 12 }}>
+                <div className="lt-eyebrow" style={{ color: C.hot }}>Not saved</div>
+                <div className="lt-note" style={{ marginTop: 4 }}>{saveError}</div>
+                <div className="lt-note" style={{ marginTop: 8, fontSize: 11 }}>
+                  Nothing is lost — this test is still held on this device and
+                  will be offered back to you when you return to capture.
+                </div>
+              </div>
+            )}
             <div className="lt-foot" style={{ marginTop: 16 }}>
               <button className="lt-btn lt-btn-ghost" onClick={() => setPhase("stage")}>
                 Back to stages
               </button>
-              <button className="lt-btn lt-btn-primary" onClick={finish} style={{ flex: 2 }}>
-                Save test
+              <button className="lt-btn lt-btn-primary" onClick={finish}
+                      disabled={saving} style={{ flex: 2 }}>
+                {saving ? "Saving…" : saveError ? "Try again" : "Save test"}
               </button>
             </div>
           </div>

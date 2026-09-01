@@ -49,7 +49,30 @@ src/
 `lib/storage.js` is deliberately the only module that touches persistence,
 so moving to a backend is a change to one file.
 
-## Status
+## Storage
 
-Data lives in `localStorage` — per-browser, not shared between devices.
-Supabase and the shared passphrase gate are next.
+Two backends behind one interface (`src/lib/storage.js`):
+
+- **Supabase** when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are
+  set at build time — shared between devices
+- **localStorage** otherwise — per-browser, no setup
+
+The fallback is deliberate: a missing env var degrades to a working
+offline app rather than a blank page. Analyze shows which is live.
+
+An in-progress test is always held locally, so a save failure or a lost
+connection never costs you a test that has already been run.
+
+## Setup
+
+1. Create a Supabase project
+2. Run `supabase/schema.sql` in the SQL editor — **read the RLS warning
+   in it first**
+3. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Netlify under
+   Site configuration → Environment variables, and in `.env.local` for
+   development
+4. Optionally set `VITE_PASSPHRASE` for the shared passphrase screen
+
+To move data recorded before the backend existed, call
+`migrateLocalToRemote()` from `src/lib/storage.js`, or use Export all
+(JSON) and import it.

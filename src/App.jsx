@@ -1,15 +1,26 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
 import { css } from "./theme.js";
 import Analyze from "./pages/Analyze.jsx";
 import Capture from "./pages/Capture.jsx";
 import Review from "./pages/Review.jsx";
+import Gate, { isUnlocked } from "./components/Gate.jsx";
 
 /* Analyze is the landing page — you arrive at what you already have,
    and start a capture from there. */
 export default function App() {
   const { pathname } = useLocation();
   const wide = !pathname.startsWith("/review");
+  const [unlocked, setUnlocked] = useState(isUnlocked);
+
+  if (!unlocked) {
+    return (
+      <div className="lt-root">
+        <style>{css}</style>
+        <Gate onUnlock={() => setUnlocked(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="lt-root">
