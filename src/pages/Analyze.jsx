@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer, Legend,
@@ -59,6 +59,7 @@ function thresholdMarks(session, method, xMode, lt1Method, unit, rate) {
    then read them two ways: curves overlaid, or thresholds over time. */
 export default function Analyze() {
   const nav = useNavigate();
+  const { state } = useLocation();
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
@@ -79,8 +80,14 @@ export default function Analyze() {
       .then((s) => {
         const sorted = [...s].sort((a, b) => String(b.date).localeCompare(String(a.date)));
         setSessions(sorted);
-        // preselect the two most recent so the page is useful on arrival
-        setPicked(new Set(sorted.slice(0, 2).map((x) => String(x.id))));
+        /* Arriving from a finished capture, show only that test. Otherwise
+           preselect the two most recent so the page is useful on arrival. */
+        const only = state?.selectOnly != null ? String(state.selectOnly) : null;
+        setPicked(
+          only && sorted.some((x) => String(x.id) === only)
+            ? new Set([only])
+            : new Set(sorted.slice(0, 2).map((x) => String(x.id)))
+        );
         /* Tests recorded on this device before the shared database
            existed. Without this they simply disappear from view, which
            looks exactly like data loss. */

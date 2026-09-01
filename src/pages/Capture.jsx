@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from "recharts";
 import { saveSession, saveDraft, getDraft, clearDraft } from "../lib/storage.js";
-import { analyze, deriveRows, pad } from "../lib/lactate.js";
+import { deriveRows, pad } from "../lib/lactate.js";
 import { C, chart, lactColor, SERIES } from "../theme.js";
 
 const OFFSETS = [48, 40, 32, 24, 16, 8]; // target HR = hrMax - offset
@@ -115,7 +115,6 @@ export default function Capture() {
   }, [phase, idx]);
 
   const rows = useMemo(() => deriveRows(stages, dist), [stages, dist]);
-  const result = useMemo(() => analyze(rows), [rows]);
   const cur = stages[idx];
   const curRow = rows[idx];
   const logged = rows.filter((r) => r.lactate != null && r.hr != null);
@@ -143,7 +142,7 @@ export default function Capture() {
     setPhase("warmup");
   }
 
-  /* Log the current stage. Last stage -> results; otherwise start rest. */
+  /* Log the current stage. Last stage ends the test; otherwise rest. */
   function logStage() {
     if (!canLog) return;
     if (idx + 1 < stages.length) {
@@ -223,7 +222,7 @@ export default function Capture() {
     try {
       await saveSession(session);
       await clearDraft();
-      nav(`/review/${session.id}`);
+      nav("/", { state: { selectOnly: session.id } });
     } catch (e) {
       setSaveError(e.message);
     } finally {
@@ -435,7 +434,7 @@ export default function Capture() {
                   End test
                 </button>
                 <button type="submit" className="lt-btn lt-btn-primary" disabled={!canLog} style={{ flex: 2 }}>
-                  {idx + 1 < stages.length ? "Log stage → rest" : "Log stage → results"}
+                  {idx + 1 < stages.length ? "Log stage → rest" : "Log stage → finish"}
                 </button>
               </div>
               <div className="lt-note" style={{ marginTop: 8, fontSize: 11 }}>
@@ -479,22 +478,11 @@ export default function Capture() {
           <div className="lt-card" style={{ marginTop: 14 }}>
             <div className="lt-eyebrow">Test complete</div>
             <div className="lt-h1">{logged.length} stages recorded</div>
-            {result ? (
-              <div className="lt-grid lt-g3" style={{ marginTop: 14 }}>
-                <Stat label="LT1 (base +0.4)"
-                      value={result.lt1 ? `${result.lt1.to.hr} bpm` : "—"} />
-                <Stat label="HR at base +1.0"
-                      value={result.hrBase1 ? `${result.hrBase1} bpm` : "—"} />
-                <Stat label="OBLA 4.0"
-                      value={result.hr4 ? `${result.hr4} bpm` : "—"}
-                      sub={result.pace4 ? `${result.pace4}/mi` : "not reached"} />
-              </div>
-            ) : (
-              <div className="lt-note" style={{ marginTop: 10 }}>
-                Fewer than three complete stages — nothing to analyse, but you
-                can still save the raw data.
-              </div>
-            )}
+            <div className="lt-note" style={{ marginTop: 10 }}>
+              {logged.length < 3
+                ? "Fewer than three complete stages — nothing to analyse, but you can still save the raw data."
+                : "Thresholds are on the analyze screen, where this test can be read against the others."}
+            </div>
             <Field label="Notes">
               <input className="lt-input" value={meta.notes} placeholder="how it went"
                      onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
@@ -668,15 +656,5 @@ function Field({ label, children }) {
       <span>{label}</span>
       {children}
     </label>
-  );
-}
-
-function Stat({ label, value, sub }) {
-  return (
-    <div className="lt-stat">
-      <div className="lt-stat-l">{label}</div>
-      <div className="lt-stat-v lt-mono">{value}</div>
-      {sub && <div className="lt-stat-s">{sub}</div>}
-    </div>
   );
 }
