@@ -237,7 +237,12 @@ export const navCss = `
 .lt-nav{padding:24px 14px 22px;border-bottom:1px solid var(--rule);margin-bottom:var(--s3);}
 .lt-nav-inner{max-width:1280px;margin:0 auto;display:flex;align-items:flex-end;
   justify-content:space-between;gap:var(--s4);}
-.lt-nav-links{display:flex;margin-top:14px;}
+/* Page title in the masthead. Same metrics as .lt-h1 per the type
+   scale, but uppercase — .lt-h1 also carries in-card headings like
+   "Set up the test", which are sentence case by design. */
+.lt-nav-title{font-size:26px;font-weight:500;letter-spacing:-.01em;line-height:1.1;
+  color:var(--bright);text-transform:uppercase;margin-top:8px;}
+.lt-nav-links{display:flex;margin-top:12px;}
 .lt-navlink{font-size:11px;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;
   padding:6px 13px;color:var(--dim);border:1px solid var(--rule);border-left:none;}
 .lt-navlink:first-child{border-left:1px solid var(--rule);}

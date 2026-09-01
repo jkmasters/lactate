@@ -42,12 +42,23 @@ export default function App() {
   );
 }
 
+/* The masthead names the page you are on, matching the active nav item. */
+const PAGE_TITLE = [
+  [/^\/capture/, "New capture"],
+  [/^\/review/, "Review"],
+  [/.*/, "Analyze"],
+];
+
 function Nav() {
+  const { pathname } = useLocation();
+  const title = PAGE_TITLE.find(([re]) => re.test(pathname))[1];
+
   return (
     <header className="lt-nav lt-horizon">
       <div className="lt-nav-inner">
         <div>
           <div className="lt-eyebrow">Lactate</div>
+          <div className="lt-nav-title">{title}</div>
           <div className="lt-nav-links">
             <NavLink to="/" end className="lt-navlink">
               Analyze
