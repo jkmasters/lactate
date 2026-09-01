@@ -249,7 +249,13 @@ export const navCss = `
 /* Analyze — list + lens. Columns divided by a hairline plus an offset
    shadow hairline, which is where the "double rule" reading comes from. */
 export const analyzeCss = `
-.lt-analyze{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:0;align-items:start;}
+.lt-analyze{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:0;
+  align-items:start;margin-top:var(--s4);}
+/* The grid spaces itself. A top margin on the first card in a column
+   starts the column box above the card, so the divider rule between the
+   columns pokes out above both panels. */
+.lt-analyze > .lt-card,
+.lt-analyze > * > .lt-card:first-child{margin-top:0;}
 @media (max-width:900px){.lt-analyze{grid-template-columns:1fr;}}
 .lt-analyze > :first-child{border-right:1px solid var(--rule);
   box-shadow:inset -3px 0 0 -2px var(--rule2);padding-right:var(--s4);}

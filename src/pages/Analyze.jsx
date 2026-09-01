@@ -166,7 +166,7 @@ export default function Analyze() {
 
   if (error) {
     return (
-      <div className="lt-card" style={{ marginTop: 14 }}>
+      <div className="lt-card">
         <div className="lt-eyebrow" style={{ color: C.hot }}>Could not reach the database</div>
         <div className="lt-h1">Saved tests are unavailable</div>
         <div className="lt-flag hot">{error}</div>
@@ -237,7 +237,7 @@ export default function Analyze() {
       <div className="lt-analyze">
         {/* ---- left: the list you click ---- */}
         <div>
-        <div className="lt-card" style={{ marginTop: 14 }}>
+        <div className="lt-card">
           <div className="lt-card-t" style={{ display: "flex", justifyContent: "space-between" }}>
             <span>Tests · {visible.length}</span>
             <button className="lt-linkbtn" onClick={toggleAll}>
@@ -314,7 +314,7 @@ export default function Analyze() {
         </div>
 
         {/* ---- right: the two lenses ---- */}
-        <div className="lt-card" style={{ marginTop: 14 }}>
+        <div className="lt-card">
           <div className="lt-card-t" style={{ display: "flex", justifyContent: "space-between" }}>
             <span>{chosen.length ? `${chosen.length} selected` : "Nothing selected"}</span>
             <div className="lt-seg sm">
