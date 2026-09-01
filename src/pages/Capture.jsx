@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { saveSession, saveDraft, getDraft, clearDraft } from "../lib/storage.js";
 import { analyze, deriveRows, pad } from "../lib/lactate.js";
-import { C, lactColor } from "../theme.js";
+import { C, chart, lactColor } from "../theme.js";
 
 const OFFSETS = [48, 40, 32, 24, 16, 8]; // target HR = hrMax - offset
 
@@ -315,7 +315,7 @@ export default function Capture() {
       {/* ---- left: what the administrator does next ---- */}
       <div>
         {resumed && (
-          <div className="lt-card lt-note" style={{ marginTop: 14, borderColor: C.signal }}>
+          <div className="lt-flag" style={{ marginTop: 14 }}>
             Resumed an interrupted test.
           </div>
         )}
@@ -500,7 +500,7 @@ export default function Capture() {
                      onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
             </Field>
             {saveError && (
-              <div className="lt-card" style={{ borderColor: C.hot, marginTop: 12 }}>
+              <div className="lt-flag hot" style={{ marginTop: 12 }}>
                 <div className="lt-eyebrow" style={{ color: C.hot }}>Not saved</div>
                 <div className="lt-note" style={{ marginTop: 4 }}>{saveError}</div>
                 <div className="lt-note" style={{ marginTop: 8, fontSize: 11 }}>
@@ -547,15 +547,14 @@ export default function Capture() {
             <ResponsiveContainer>
               <LineChart data={logged.map((r) => ({ x: r.hr, lactate: r.lactate }))}
                          margin={{ top: 8, right: 12, bottom: 20, left: 4 }}>
-                <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
+                <CartesianGrid stroke={chart.grid} />
                 <XAxis type="number" dataKey="x" domain={["dataMin - 4", "dataMax + 4"]}
                        tick={{ fill: C.muted, fontSize: 11 }}
                        label={{ value: "heart rate (bpm)", position: "insideBottom",
                                 offset: -12, fill: C.dim, fontSize: 11 }} />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} domain={[0, "dataMax + 1"]} />
                 <Tooltip
-                  contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`,
-                                  borderRadius: 8, fontSize: 12 }}
+                  contentStyle={chart.tooltip}
                   labelFormatter={(v) => `${Math.round(v)} bpm`}
                   formatter={(v) => [`${v} mmol/L`, "lactate"]} />
                 <ReferenceLine y={4} stroke={C.warm} strokeDasharray="4 4"

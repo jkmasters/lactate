@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { getSession, deleteSession, deleteNeedsPassword } from "../lib/storage.js";
 import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
-import { C, lactColor } from "../theme.js";
+import { C, chart, lactColor } from "../theme.js";
 
 /* Review — one test, in detail. Reached by clicking a row in Analyze,
    or straight after saving a capture. */
@@ -25,10 +25,10 @@ export default function Review() {
   if (session === undefined) return <div className="lt-card lt-note">Loading…</div>;
   if (error) {
     return (
-      <div className="lt-card" style={{ marginTop: 14, borderColor: C.hot }}>
+      <div className="lt-card" style={{ marginTop: 14 }}>
         <div className="lt-eyebrow" style={{ color: C.hot }}>Could not reach the database</div>
         <div className="lt-h1">Test unavailable</div>
-        <div className="lt-sub" style={{ margin: "8px 0 18px" }}>{error}</div>
+        <div className="lt-flag hot" style={{ marginBottom: 18 }}>{error}</div>
         <Link className="lt-btn lt-btn-primary" to="/">Back to all tests</Link>
       </div>
     );
@@ -192,10 +192,10 @@ export default function Review() {
             </button>
           </div>
         </div>
-        <div style={{ height: 300 }}>
+        <div className="lt-gridfield" style={{ height: 300 }}>
           <ResponsiveContainer>
             <LineChart data={chart} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
-              <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
+              <CartesianGrid stroke={chart.grid} />
               <XAxis
                 type="number" dataKey="x" domain={["dataMin - 2", "dataMax + 2"]}
                 reversed={xMode === "pace"}
@@ -207,7 +207,7 @@ export default function Review() {
               <YAxis tick={{ fill: C.muted, fontSize: 11 }}
                      label={{ value: "mmol/L", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
+                contentStyle={chart.tooltip}
                 labelFormatter={(v) => (xMode === "hr" ? `${Math.round(v)} bpm` : `${minToPace(v)}/mi`)}
                 formatter={(v) => [`${v} mmol/L`, "lactate"]}
               />

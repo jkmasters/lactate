@@ -12,7 +12,7 @@ import {
   analyze, deriveRows, minToPace, pad,
   convertPace, formatPaceValue, unitLabel,
 } from "../lib/lactate.js";
-import { C } from "../theme.js";
+import { C, chart } from "../theme.js";
 
 const SERIES = [C.signal, C.cool, C.warm, C.hot, "#8E7CC3", "#6FBF73"];
 
@@ -161,10 +161,10 @@ export default function Analyze() {
 
   if (error) {
     return (
-      <div className="lt-card" style={{ marginTop: 14, borderColor: C.hot }}>
+      <div className="lt-card" style={{ marginTop: 14 }}>
         <div className="lt-eyebrow" style={{ color: C.hot }}>Could not reach the database</div>
         <div className="lt-h1">Saved tests are unavailable</div>
-        <div className="lt-sub" style={{ margin: "8px 0 6px" }}>{error}</div>
+        <div className="lt-flag hot">{error}</div>
         <div className="lt-note" style={{ marginBottom: 16 }}>
           Capture still works — a test in progress is held on this device and
           can be saved once the connection is back.
@@ -424,7 +424,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
       <div style={{ height: 340 }}>
         <ResponsiveContainer>
           <LineChart margin={{ top: 8, right: 12, bottom: 8, left: 4 }}>
-            <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
+            <CartesianGrid stroke={chart.grid} />
             <XAxis
               type="number"
               dataKey="x"
@@ -441,7 +441,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
               label={{ value: "mmol/L", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 11 }}
             />
             <Tooltip
-              contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
+              contentStyle={chart.tooltip}
               labelFormatter={(v) =>
                 xMode === "hr" ? `${Math.round(v)} bpm` : `${fmtX(v)} ${unitLabel(unit, rate)}`}
               formatter={(val, name) => [`${val} mmol/L`, name]}
@@ -526,7 +526,7 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
       <div style={{ height: 282 }}>
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
-          <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
+          <CartesianGrid stroke={chart.grid} />
           <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
           <YAxis
             yAxisId="hr"
@@ -547,7 +547,7 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
                      fill: C.dim, fontSize: 11 }}
           />
           <Tooltip
-            contentStyle={{ background: C.panel2, border: `1px solid ${C.rule}`, borderRadius: 8, fontSize: 12 }}
+            contentStyle={chart.tooltip}
             formatter={(v, n) =>
               String(n).startsWith("Pace")
                 ? [`${formatPaceValue(v, rate)} ${unitLabel(unit, rate)}`, n]
