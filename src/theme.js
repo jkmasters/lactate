@@ -17,6 +17,10 @@ export const C = {
   cool: "#4FB3C9",
   warm: "#E39A4B",
   hot: "#E2564A",
+  /* Selected-control grey. Deliberately outside the series palette: the
+     chips were using signal, the same yellow as the first plotted test,
+     which made the controls look like they belonged to that test. */
+  sel: "#C3CCD8",
 };
 
 export const lactColor = (v) =>
@@ -29,6 +33,7 @@ const baseCss = `
   --ground:${C.ground}; --panel:${C.panel}; --panel2:${C.panel2};
   --rule:${C.rule}; --ink:${C.ink}; --muted:${C.muted}; --dim:${C.dim};
   --signal:${C.signal}; --cool:${C.cool}; --warm:${C.warm}; --hot:${C.hot};
+  --sel:${C.sel};
   background:var(--ground); color:var(--ink); min-height:100vh;
   font-family:'Archivo','Helvetica Neue',Arial,sans-serif;
   -webkit-font-smoothing:antialiased; padding:18px 14px 40px;
@@ -182,7 +187,9 @@ export const analyzeCss = `
   border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;
   font-family:inherit;}
 .lt-seg-b:hover{color:var(--ink);}
-.lt-seg-b.on{background:var(--signal);border-color:var(--signal);color:var(--ground);}
+.lt-seg-b.on{background:var(--sel);border-color:#E4EAF1;color:var(--ground);
+  box-shadow:0 0 0 1px rgba(255,255,255,.14);}
+.lt-seg-b.on:hover{background:#D6DEE8;color:var(--ground);}
 .lt-seg.sm .lt-seg-b{padding:3px 8px;font-size:10px;}
 .lt-underlist{display:flex;align-items:center;justify-content:space-between;
   gap:10px;padding:6px 4px 0;}

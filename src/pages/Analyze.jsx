@@ -273,7 +273,9 @@ export default function Analyze() {
                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(s.id); }
                      }}>
                   <label className="lt-check" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={on} onChange={() => toggle(s.id)} />
+                    {/* the tick, the swatch and the plotted curve all agree */}
+                    <input type="checkbox" checked={on} onChange={() => toggle(s.id)}
+                           style={on ? { accentColor: colour } : undefined} />
                     <span
                       className="lt-swatch"
                       style={{ background: on ? colour : "transparent", borderColor: on ? colour : C.rule }}
