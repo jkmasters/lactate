@@ -41,16 +41,18 @@ export default function App() {
 
 function Nav() {
   return (
-    <header className="lt-nav">
-      <div>
-        <div className="lt-eyebrow">Lactate</div>
-        <div className="lt-nav-links">
-          <NavLink to="/" end className="lt-navlink">
-            Analyze
-          </NavLink>
-          <NavLink to="/capture" className="lt-navlink">
-            New capture
-          </NavLink>
+    <header className="lt-nav lt-horizon">
+      <div className="lt-nav-inner">
+        <div>
+          <div className="lt-eyebrow">Lactate</div>
+          <div className="lt-nav-links">
+            <NavLink to="/" end className="lt-navlink">
+              Analyze
+            </NavLink>
+            <NavLink to="/capture" className="lt-navlink">
+              New capture
+            </NavLink>
+          </div>
         </div>
       </div>
     </header>

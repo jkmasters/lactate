@@ -543,7 +543,7 @@ export default function Capture() {
             The curve appears once two stages are logged.
           </div>
         ) : (
-          <div style={{ height: 240 }}>
+          <div className="lt-gridfield" style={{ height: 240 }}>
             <ResponsiveContainer>
               <LineChart data={logged.map((r) => ({ x: r.hr, lactate: r.lactate }))}
                          margin={{ top: 8, right: 12, bottom: 20, left: 4 }}>

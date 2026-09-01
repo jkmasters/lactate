@@ -306,14 +306,6 @@ export default function Analyze() {
 
         {/* backend note and export sit outside the selector, which is
             now only for choosing tests */}
-        <div className="lt-underlist">
-          <span className="lt-note" style={{ fontSize: 10 }}>
-            {backend() === "supabase"
-              ? "Saving to the shared database"
-              : "Saving to this browser only"}
-          </span>
-          <button className="lt-linkbtn" onClick={download}>export all (JSON)</button>
-        </div>
         </div>
 
         {/* ---- right: the two lenses ---- */}
@@ -345,6 +337,16 @@ export default function Analyze() {
                    unit={unit} rate={rate} />
           )}
         </div>
+      </div>
+
+      {/* pinned facts, not a route to a primary action */}
+      <div className="lt-status">
+        <span>
+          {backend() === "supabase"
+            ? "Saving to the shared database"
+            : "Saving to this browser only"}
+        </span>
+        <button className="lt-linkbtn" onClick={download}>export all (JSON)</button>
       </div>
     </>
   );
@@ -378,7 +380,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
 
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+      <div className="lt-pickers">
         <div>
           <div className="lt-picker-l">Axis</div>
           <div className="lt-seg sm">
@@ -421,7 +423,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setL
         LT1 dotted ({LT1_METHODS[lt1Method].name}) · LT2 dashed ({METHODS[method].name}),
         coloured to match each test
       </div>
-      <div style={{ height: 340 }}>
+      <div className="lt-gridfield" style={{ height: 340 }}>
         <ResponsiveContainer>
           <LineChart margin={{ top: 8, right: 12, bottom: 8, left: 4 }}>
             <CartesianGrid stroke={chart.grid} />
@@ -523,7 +525,7 @@ function Trend({ sessions, method, setMethod, lt1Method, setLt1Method, unit, rat
     <>
       <MethodPicker method={method} setMethod={setMethod}
                     lt1Method={lt1Method} setLt1Method={setLt1Method} />
-      <div style={{ height: 282 }}>
+      <div className="lt-gridfield" style={{ height: 282 }}>
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
           <CartesianGrid stroke={chart.grid} />
@@ -596,7 +598,7 @@ function ThresholdTiles({ sessions, method, lt1Method, unit, rate }) {
 
   const label = unitLabel(unit, rate);
 
-  const tile = (title, method_, cur, prev) => {
+  const tile = (title, method_, cur, prev, accent) => {
     const pace = cur ? convertPace(cur.perMileSec, unit, rate) : null;
     const prevPace = prev ? convertPace(prev.perMileSec, unit, rate) : null;
     /* Faster is a lower number for pace and a higher one for speed. */
@@ -609,7 +611,9 @@ function ThresholdTiles({ sessions, method, lt1Method, unit, rate }) {
         <div className="lt-tile-h">
           {title} <span className="lt-tile-m">{method_}</span>
         </div>
-        <div className="lt-tile-v lt-mono">{formatPaceValue(pace, rate)}</div>
+        <div className={`lt-tile-v lt-mono${accent === "cool" ? " cool" : ""}`}>
+          {formatPaceValue(pace, rate)}
+        </div>
         <div className="lt-tile-u">{label}</div>
         <div className="lt-tile-hr lt-mono">{cur?.hr != null ? `${cur.hr} bpm` : "— bpm"}</div>
         {delta != null && delta > 0.001 && (
@@ -628,8 +632,8 @@ function ThresholdTiles({ sessions, method, lt1Method, unit, rate }) {
         {byDate.length > 1 ? ` · most recent of ${byDate.length} selected` : ""}
       </div>
       <div className="lt-tiles">
-        {tile("Est. LT1", LT1_METHODS[lt1Method].name, now.lt1, then?.lt1)}
-        {tile("Est. LT2", METHODS[method].name, now.lt2, then?.lt2)}
+        {tile("Est. LT1", LT1_METHODS[lt1Method].name, now.lt1, then?.lt1, "cool")}
+        {tile("Est. LT2", METHODS[method].name, now.lt2, then?.lt2, "signal")}
       </div>
     </>
   );
@@ -639,7 +643,7 @@ function ThresholdTiles({ sessions, method, lt1Method, unit, rate }) {
    two views of the same selection. */
 function MethodPicker({ method, setMethod, lt1Method, setLt1Method }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 10 }}>
+    <div className="lt-pickers">
       <div>
         <div className="lt-picker-l">LT1</div>
         <div className="lt-seg sm">
