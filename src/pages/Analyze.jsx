@@ -19,12 +19,17 @@ const METHODS = {
   moddmax: { label: "Modified Dmax", name: "Mod Dmax" },
 };
 
+const LT1_METHODS = {
+  delta:  { label: "base +0.4", name: "base +0.4" },
+  loglog: { label: "log-log",   name: "log-log" },
+};
+
 /* Where LT1 and LT2 fall on the intensity axis for one test, in whichever
    units the chart is currently plotting. Vertical lines, because a
    threshold is an intensity — the lactate value at it is incidental, and
    with a fixed method like OBLA every test would share one horizontal
    line anyway. */
-function thresholdMarks(session, method, xMode) {
+function thresholdMarks(session, method, xMode, lt1Method = "delta") {
   const r = analyze(deriveRows(session.rows ?? [], session.dist));
   if (!r) return { lt1: null, lt2: null };
 
@@ -33,7 +38,11 @@ function thresholdMarks(session, method, xMode) {
       ? (hr ?? null)
       : perMileSec != null ? perMileSec / 60 : null;
 
-  const lt1 = r.lt1 ? asX(r.lt1.to.hr, r.lt1.to.perMileSec) : null;
+  const lt1src =
+    lt1Method === "loglog" ? r.logLog
+    : r.lt1 ? { hr: r.lt1.to.hr, perMileSec: r.lt1.to.perMileSec }
+    : null;
+  const lt1 = lt1src ? asX(lt1src.hr, lt1src.perMileSec) : null;
 
   const src =
     method === "dmax" ? r.dmax
@@ -59,7 +68,8 @@ export default function Analyze() {
   const [picked, setPicked] = useState(() => new Set());
   const [athlete, setAthlete] = useState("all");
   const [lens, setLens] = useState("overlay"); // overlay | trend
-  const [method, setMethod] = useState("obla");  // obla | dmax | moddmax
+  const [method, setMethod] = useState("obla");      // obla | dmax | moddmax
+  const [lt1Method, setLt1Method] = useState("delta"); // delta | loglog
   const [xMode, setXMode] = useState("hr");    // hr | pace
 
   function load() {
@@ -315,9 +325,11 @@ export default function Analyze() {
             </div>
           ) : lens === "overlay" ? (
             <Overlay sessions={chosen} xMode={xMode} setXMode={setXMode}
-                     method={method} setMethod={setMethod} />
+                     method={method} setMethod={setMethod}
+                     lt1Method={lt1Method} setLt1Method={setLt1Method} />
           ) : (
-            <Trend sessions={chosen} method={method} setMethod={setMethod} />
+            <Trend sessions={chosen} method={method} setMethod={setMethod}
+                   lt1Method={lt1Method} setLt1Method={setLt1Method} />
           )}
         </div>
       </div>
@@ -327,14 +339,14 @@ export default function Analyze() {
 
 /* Curves on shared axes. Uncapped — the artifact could only ever
    compare the last three. */
-function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
+function Overlay({ sessions, xMode, setXMode, method, setMethod, lt1Method, setLt1Method }) {
   const series = sessions.map((s) => ({
     id: String(s.id),
     name: s.label || s.date,
     points: deriveRows(s.rows ?? [], s.dist)
       .filter((r) => r.lactate != null && (xMode === "hr" ? r.hr != null : r.perMileSec != null))
       .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, y: r.lactate })),
-    marks: thresholdMarks(s, method, xMode),
+    marks: thresholdMarks(s, method, xMode, lt1Method),
   }));
 
   return (
@@ -347,20 +359,15 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
           vs pace
         </button>
       </div>
-      <div className="lt-seg sm" style={{ marginBottom: 10 }}>
-        {Object.entries(METHODS).map(([k, m]) => (
-          <button key={k} className={`lt-seg-b ${method === k ? "on" : ""}`}
-                  onClick={() => setMethod(k)}>
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <MethodPicker method={method} setMethod={setMethod}
+                    lt1Method={lt1Method} setLt1Method={setLt1Method} />
       <div className="lt-note" style={{ fontSize: 10, marginBottom: 6 }}>
-        LT1 dotted · LT2 dashed ({METHODS[method].name}), coloured to match each test
+        LT1 dotted ({LT1_METHODS[lt1Method].name}) · LT2 dashed ({METHODS[method].name}),
+        coloured to match each test
       </div>
       <div style={{ height: 340 }}>
         <ResponsiveContainer>
-          <LineChart margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
+          <LineChart margin={{ top: 8, right: 12, bottom: 8, left: 4 }}>
             <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
             <XAxis
               type="number"
@@ -369,10 +376,6 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
               reversed={xMode === "pace"}
               tick={{ fill: C.muted, fontSize: 11 }}
               tickFormatter={(v) => (xMode === "hr" ? Math.round(v) : minToPace(v))}
-              label={{
-                value: xMode === "hr" ? "heart rate (bpm)" : "pace (min/mi)",
-                position: "insideBottom", offset: -14, fill: C.dim, fontSize: 11,
-              }}
             />
             <YAxis
               tick={{ fill: C.muted, fontSize: 11 }}
@@ -383,7 +386,8 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
               labelFormatter={(v) => (xMode === "hr" ? `${Math.round(v)} bpm` : `${minToPace(v)}/mi`)}
               formatter={(val, name) => [`${val} mmol/L`, name]}
             />
-            <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
+            <Legend wrapperStyle={{ fontSize: 11, color: C.muted, paddingTop: 6 }}
+                    verticalAlign="bottom" />
             {series.flatMap((s, i) => {
               const colour = SERIES[i % SERIES.length];
               const out = [];
@@ -422,7 +426,7 @@ function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
 
 /* Thresholds over time — the view that needed a backend, and the
    reason any of this is worth keeping. */
-function Trend({ sessions, method, setMethod }) {
+function Trend({ sessions, method, setMethod, lt1Method, setLt1Method }) {
   const data = [...sessions]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((s) => {
@@ -437,7 +441,7 @@ function Trend({ sessions, method, setMethod }) {
         date: s.date,
         label: s.label || s.date,
         hr4: th?.hr ?? null,
-        hrLt1: r?.hrBase1 ?? null,
+        hrLt1: lt1Method === "loglog" ? (r?.logLog?.hr ?? null) : (r?.lt1?.to?.hr ?? null),
         pace4: th?.pace ? paceToMin(th.pace) : null,
       };
     });
@@ -455,15 +459,9 @@ function Trend({ sessions, method, setMethod }) {
 
   return (
     <>
-      <div className="lt-seg sm" style={{ marginBottom: 10 }}>
-        {Object.entries(METHODS).map(([k, m]) => (
-          <button key={k} className={`lt-seg-b ${method === k ? "on" : ""}`}
-                  onClick={() => setMethod(k)}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <div style={{ height: 306 }}>
+      <MethodPicker method={method} setMethod={setMethod}
+                    lt1Method={lt1Method} setLt1Method={setLt1Method} />
+      <div style={{ height: 282 }}>
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
           <CartesianGrid stroke={C.rule} strokeDasharray="2 4" />
@@ -489,7 +487,7 @@ function Trend({ sessions, method, setMethod }) {
             formatter={(v, n) => (String(n).startsWith("Pace") ? [`${minToPace(v)}/mi`, n] : [`${v} bpm`, n])}
           />
           <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
-          <Line yAxisId="hr" dataKey="hrLt1" name="HR at LT1 (bpm)" stroke={C.cool}
+          <Line yAxisId="hr" dataKey="hrLt1" name={`HR at LT1 ${LT1_METHODS[lt1Method].name} (bpm)`} stroke={C.cool}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
           <Line yAxisId="hr" dataKey="hr4" name={`HR at ${METHODS[method].name} (bpm)`} stroke={C.hot}
                 strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
@@ -499,6 +497,37 @@ function Trend({ sessions, method, setMethod }) {
       </ResponsiveContainer>
       </div>
     </>
+  );
+}
+
+/* One control for both charts, so the method never differs between the
+   two views of the same selection. */
+function MethodPicker({ method, setMethod, lt1Method, setLt1Method }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 10 }}>
+      <div>
+        <div className="lt-picker-l">LT1</div>
+        <div className="lt-seg sm">
+          {Object.entries(LT1_METHODS).map(([k, m]) => (
+            <button key={k} className={`lt-seg-b ${lt1Method === k ? "on" : ""}`}
+                    onClick={() => setLt1Method(k)}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="lt-picker-l">LT2</div>
+        <div className="lt-seg sm">
+          {Object.entries(METHODS).map(([k, m]) => (
+            <button key={k} className={`lt-seg-b ${method === k ? "on" : ""}`}
+                    onClick={() => setMethod(k)}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

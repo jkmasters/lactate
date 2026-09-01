@@ -184,6 +184,8 @@ export const analyzeCss = `
 .lt-seg-b:hover{color:var(--ink);}
 .lt-seg-b.on{background:var(--signal);border-color:var(--signal);color:var(--ground);}
 .lt-seg.sm .lt-seg-b{padding:3px 8px;font-size:10px;}
+.lt-picker-l{font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);font-weight:600;margin-bottom:3px;font-family:'JetBrains Mono',monospace;}
 `;
 
 

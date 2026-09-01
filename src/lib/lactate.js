@@ -98,6 +98,7 @@ export function analyze(rows) {
     max: done[done.length - 1],
     dmax: dmax(rows),
     modDmax: modifiedDmax(rows),
+    logLog: logLog(rows),
   };
 }
 
@@ -274,4 +275,82 @@ export function modifiedDmax(rows) {
   }
   if (start < 0 || start > pts.length - 2) return null;
   return dmaxFrom(rows, start);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Log-log (Beaver et al.)
+ *
+ *  ln(lactate) against ln(velocity) falls into two roughly straight
+ *  segments; where they meet is LT1. Every split of the data is tried,
+ *  the one with the lowest combined residual wins, and the threshold is
+ *  taken as the intersection of the two fitted lines rather than the
+ *  nearest data point — so the answer is not pinned to a stage boundary.
+ * ------------------------------------------------------------------ */
+
+/* Ordinary least squares. Returns slope, intercept and residual sum. */
+function lineFit(xs, ys) {
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (xs[i] - mx) * (ys[i] - my);
+    sxx += (xs[i] - mx) ** 2;
+  }
+  if (Math.abs(sxx) < 1e-15) return null;      // vertical, no fit
+  const b = sxy / sxx;
+  const a = my - b * mx;
+  let sse = 0;
+  for (let i = 0; i < n; i++) sse += (ys[i] - (a + b * xs[i])) ** 2;
+  return { a, b, sse };
+}
+
+export function logLog(rows) {
+  const pts = rows
+    .filter((r) => r.lactate != null && r.lactate > 0 && r.perMileSec && r.hr != null)
+    .map((r) => ({ v: MILE_M / r.perMileSec, y: r.lactate, hr: r.hr }))
+    .sort((a, b) => a.v - b.v);
+
+  // two segments of at least two points each
+  if (pts.length < 4) return null;
+
+  const X = pts.map((p) => Math.log(p.v));
+  const Y = pts.map((p) => Math.log(p.y));
+
+  let best = null;
+  for (let k = 1; k <= pts.length - 3; k++) {
+    const lo = lineFit(X.slice(0, k + 1), Y.slice(0, k + 1));
+    const hi = lineFit(X.slice(k + 1), Y.slice(k + 1));
+    if (!lo || !hi) continue;
+    const sse = lo.sse + hi.sse;
+    if (!best || sse < best.sse) best = { sse, lo, hi, k };
+  }
+  if (!best) return null;
+
+  // intersection of the two lines
+  const { lo, hi } = best;
+  if (Math.abs(lo.b - hi.b) < 1e-9) return null;          // parallel
+  const xStar = (hi.a - lo.a) / (lo.b - hi.b);
+  if (!Number.isFinite(xStar) || xStar < X[0] || xStar > X[X.length - 1]) return null;
+
+  /* A lactate curve breaks upward: past LT1 the second segment must be
+     steeper than the first. If the best split does not produce that, the
+     data has no breakpoint and the intersection is an artefact of fitting
+     two lines to what is really one. */
+  const ratio = hi.b / lo.b;
+  if (!(ratio > 1)) return null;
+
+  const v = Math.exp(xStar);
+  const perMileSec = MILE_M / v;
+  return {
+    v,
+    lactate: +Math.exp(lo.a + lo.b * xStar).toFixed(2),
+    hr: Math.round(atVelocity(pts, "hr", v) ?? NaN) || null,
+    pace: `${Math.floor(perMileSec / 60)}:${pad(Math.round(perMileSec % 60))}`,
+    perMileSec,
+    slopeRatio: +ratio.toFixed(2),
+    /* Real curves break hard — ratios of 2 and up. A shallow break is
+       worth reporting but not worth trusting on its own. */
+    weak: ratio < 1.5,
+  };
 }

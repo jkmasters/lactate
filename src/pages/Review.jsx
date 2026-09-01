@@ -127,7 +127,12 @@ export default function Review() {
 
           <div className="lt-card">
             <div className="lt-card-t">Curve-shape thresholds</div>
-            <div className="lt-grid lt-g2">
+            <div className="lt-grid lt-g3">
+              <Stat label="LT1 (log-log)"
+                    value={result.logLog ? `${result.logLog.hr} bpm` : "—"}
+                    sub={result.logLog
+                      ? `${result.logLog.pace}/mi · ${result.logLog.lactate} mmol`
+                      : "no breakpoint found"} />
               <Stat label="Dmax"
                     value={result.dmax ? `${result.dmax.hr} bpm` : "—"}
                     sub={result.dmax
@@ -139,6 +144,13 @@ export default function Review() {
                       ? `${result.modDmax.pace}/mi · ${result.modDmax.lactate} mmol`
                       : "needs 5+ stages with a clear rise"} />
             </div>
+            {result.logLog?.weak && (
+              <div className="lt-note" style={{ marginTop: 10, color: C.warm }}>
+                The log-log breakpoint is shallow — the curve barely changes
+                slope there ({result.logLog.slopeRatio}×), so treat that figure
+                as indicative rather than definitive.
+              </div>
+            )}
             {result.dmax?.submaximal && (
               <div className="lt-note" style={{ marginTop: 10, color: C.warm }}>
                 The last stage finished below 4 mmol, so this test may not have
@@ -148,9 +160,11 @@ export default function Review() {
               </div>
             )}
             <div className="lt-note" style={{ marginTop: 8, fontSize: 11 }}>
-              Furthest point on the fitted curve from a chord. Dmax spans the
-              first stage to the last; Modified Dmax starts at LT1 instead, so
-              an easy opening stage cannot drag the answer around.
+              Log-log finds LT1 where ln(lactate) against ln(velocity) changes
+              slope. Dmax and Modified Dmax find LT2 as the point on the fitted
+              curve furthest from a chord — Dmax spanning the first stage to the
+              last, Modified Dmax starting at LT1 so an easy opening stage
+              cannot drag the answer around.
             </div>
           </div>
         </>

@@ -24,14 +24,23 @@ Fixed concentration:
 | base +1.0 | baseline + 1.0 mmol, interpolated to HR |
 | OBLA 4.0 | fixed 4 mmol, interpolated to HR and pace |
 
-Curve shape — the point on a fitted cubic furthest from a chord, found
-by solving where the tangent matches the chord's slope rather than
-searching perpendicular distances:
+Curve shape:
 
-| method | chord runs from |
-| --- | --- |
-| Dmax | first stage to last |
-| Modified Dmax | LT1 to last |
+| method | finds | how |
+| --- | --- | --- |
+| log-log | LT1 | breakpoint of ln(lactate) vs ln(velocity) |
+| Dmax | LT2 | chord from the first stage to the last |
+| Modified Dmax | LT2 | chord from LT1 to the last |
+
+Log-log tries every split of the data, keeps the one with the lowest
+combined residual, and takes the intersection of the two fitted lines
+rather than the nearest stage. A lactate curve breaks upward, so a split
+whose second segment is not steeper than the first is rejected as no
+breakpoint at all; a shallow break still reports but is flagged.
+
+The Dmax pair solve where the tangent to a fitted cubic matches the
+chord's slope, which is the same point as the maximum perpendicular
+distance without searching for it.
 
 Both need five or more stages (a cubic through four points is an exact
 fit and says nothing) and a genuinely maximal final stage, since the last
@@ -43,9 +52,8 @@ stage 2 or 3 as clearance catches up, and a three-stage window catches
 that. The pre-test rest and baseline readings are recorded for reference
 but do not feed the threshold math.
 
-Log-log and the Stegmann IAT are not implemented — log-log gives LT1
-rather than LT2, and IAT needs lactate sampled during recovery, which
-this protocol does not collect.
+The Stegmann IAT is not implemented: it needs lactate sampled during
+recovery, which this protocol does not collect.
 
 ## Running it
 
