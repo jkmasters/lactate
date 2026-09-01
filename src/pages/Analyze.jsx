@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
+  ResponsiveContainer, Legend,
 } from "recharts";
 import {
   getSessions, deleteSession, deleteNeedsPassword, exportAll, backend,
@@ -11,6 +12,40 @@ import { analyze, deriveRows, minToPace, pad } from "../lib/lactate.js";
 import { C } from "../theme.js";
 
 const SERIES = [C.signal, C.cool, C.warm, C.hot, "#8E7CC3", "#6FBF73"];
+
+const METHODS = {
+  obla:    { label: "OBLA 4.0",      name: "4 mmol" },
+  dmax:    { label: "Dmax",          name: "Dmax" },
+  moddmax: { label: "Modified Dmax", name: "Mod Dmax" },
+};
+
+/* Where LT1 and LT2 fall on the intensity axis for one test, in whichever
+   units the chart is currently plotting. Vertical lines, because a
+   threshold is an intensity — the lactate value at it is incidental, and
+   with a fixed method like OBLA every test would share one horizontal
+   line anyway. */
+function thresholdMarks(session, method, xMode) {
+  const r = analyze(deriveRows(session.rows ?? [], session.dist));
+  if (!r) return { lt1: null, lt2: null };
+
+  const asX = (hr, perMileSec) =>
+    xMode === "hr"
+      ? (hr ?? null)
+      : perMileSec != null ? perMileSec / 60 : null;
+
+  const lt1 = r.lt1 ? asX(r.lt1.to.hr, r.lt1.to.perMileSec) : null;
+
+  const src =
+    method === "dmax" ? r.dmax
+    : method === "moddmax" ? r.modDmax
+    : r.hr4 != null
+      ? { hr: r.hr4, perMileSec: r.pace4 ? paceToMin(r.pace4) * 60 : null }
+      : null;
+
+  return { lt1, lt2: src ? asX(src.hr, src.perMileSec) : null };
+}
+
+
 
 /* Analyze — the landing page. Every capture, tick the ones you want,
    then read them two ways: curves overlaid, or thresholds over time. */
@@ -279,7 +314,8 @@ export default function Analyze() {
               Tick a test to plot it.
             </div>
           ) : lens === "overlay" ? (
-            <Overlay sessions={chosen} xMode={xMode} setXMode={setXMode} />
+            <Overlay sessions={chosen} xMode={xMode} setXMode={setXMode}
+                     method={method} setMethod={setMethod} />
           ) : (
             <Trend sessions={chosen} method={method} setMethod={setMethod} />
           )}
@@ -291,24 +327,36 @@ export default function Analyze() {
 
 /* Curves on shared axes. Uncapped — the artifact could only ever
    compare the last three. */
-function Overlay({ sessions, xMode, setXMode }) {
+function Overlay({ sessions, xMode, setXMode, method, setMethod }) {
   const series = sessions.map((s) => ({
     id: String(s.id),
     name: s.label || s.date,
     points: deriveRows(s.rows ?? [], s.dist)
       .filter((r) => r.lactate != null && (xMode === "hr" ? r.hr != null : r.perMileSec != null))
       .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, y: r.lactate })),
+    marks: thresholdMarks(s, method, xMode),
   }));
 
   return (
     <>
-      <div className="lt-seg sm" style={{ marginBottom: 10 }}>
+      <div className="lt-seg sm" style={{ marginBottom: 6 }}>
         <button className={`lt-seg-b ${xMode === "hr" ? "on" : ""}`} onClick={() => setXMode("hr")}>
           vs heart rate
         </button>
         <button className={`lt-seg-b ${xMode === "pace" ? "on" : ""}`} onClick={() => setXMode("pace")}>
           vs pace
         </button>
+      </div>
+      <div className="lt-seg sm" style={{ marginBottom: 10 }}>
+        {Object.entries(METHODS).map(([k, m]) => (
+          <button key={k} className={`lt-seg-b ${method === k ? "on" : ""}`}
+                  onClick={() => setMethod(k)}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="lt-note" style={{ fontSize: 10, marginBottom: 6 }}>
+        LT1 dotted · LT2 dashed ({METHODS[method].name}), coloured to match each test
       </div>
       <div style={{ height: 340 }}>
         <ResponsiveContainer>
@@ -336,6 +384,22 @@ function Overlay({ sessions, xMode, setXMode }) {
               formatter={(val, name) => [`${val} mmol/L`, name]}
             />
             <Legend wrapperStyle={{ fontSize: 11, color: C.muted }} />
+            {series.flatMap((s, i) => {
+              const colour = SERIES[i % SERIES.length];
+              const out = [];
+              // thinner than the curves so they read as annotation
+              if (s.marks.lt1 != null)
+                out.push(
+                  <ReferenceLine key={`${s.id}-lt1`} x={s.marks.lt1} stroke={colour}
+                                 strokeWidth={1} strokeDasharray="1 4" strokeOpacity={0.9} />
+                );
+              if (s.marks.lt2 != null)
+                out.push(
+                  <ReferenceLine key={`${s.id}-lt2`} x={s.marks.lt2} stroke={colour}
+                                 strokeWidth={1} strokeDasharray="7 4" strokeOpacity={0.9} />
+                );
+              return out;
+            })}
             {series.map((s, i) => (
               <Line
                 key={s.id}
@@ -358,12 +422,6 @@ function Overlay({ sessions, xMode, setXMode }) {
 
 /* Thresholds over time — the view that needed a backend, and the
    reason any of this is worth keeping. */
-const METHODS = {
-  obla:    { label: "OBLA 4.0",      name: "4 mmol" },
-  dmax:    { label: "Dmax",          name: "Dmax" },
-  moddmax: { label: "Modified Dmax", name: "Mod Dmax" },
-};
-
 function Trend({ sessions, method, setMethod }) {
   const data = [...sessions]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
