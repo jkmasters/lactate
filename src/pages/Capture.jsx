@@ -534,7 +534,7 @@ export default function Capture() {
           <div className="lt-gridfield" style={{ height: 240 }}>
             <ResponsiveContainer>
               <LineChart data={logged.map((r) => ({ x: r.hr, lactate: r.lactate }))}
-                         margin={{ top: 8, right: 12, bottom: 20, left: 4 }}>
+                         margin={{ top: 8, right: 42, bottom: 20, left: 4 }}>
                 <CartesianGrid stroke={chart.grid} />
                 <XAxis type="number" dataKey="x" domain={["dataMin - 4", "dataMax + 4"]}
                        tick={chart.tick}

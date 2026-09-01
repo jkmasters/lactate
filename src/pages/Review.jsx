@@ -51,6 +51,11 @@ export default function Review() {
     .filter((r) => r.lactate != null && (xMode === "hr" ? r.hr != null : r.perMileSec != null))
     .map((r) => ({ x: xMode === "hr" ? r.hr : r.perMileSec / 60, lactate: r.lactate }));
 
+  /* Axis padding has to match the unit: 2 is a couple of beats on the HR
+     axis but two whole minutes on a pace axis, which pushed the curve
+     into a corner. Review always shows pace as min/mi. */
+  const xPad = xMode === "hr" ? 2 : 0.15;
+
   async function remove() {
     let pw;
     if (deleteNeedsPassword()) {
@@ -194,10 +199,11 @@ export default function Review() {
         </div>
         <div className="lt-gridfield" style={{ height: 300 }}>
           <ResponsiveContainer>
-            <LineChart data={chart} margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
+            <LineChart data={chart} margin={{ top: 8, right: 42, bottom: 24, left: 4 }}>
               <CartesianGrid stroke={chart.grid} />
               <XAxis
-                type="number" dataKey="x" domain={["dataMin - 2", "dataMax + 2"]}
+                type="number" dataKey="x"
+                domain={[(min) => min - xPad, (max) => max + xPad]}
                 reversed={xMode === "pace"}
                 tick={chart.tick}
                 tickFormatter={(v) => (xMode === "hr" ? Math.round(v) : minToPace(v))}
